@@ -1,0 +1,11 @@
+numpy
+opencv-python
+tensorflow
+keras
+scipy
+matplotlib
+reportlab
+pytest
+pydot
+graphviz
+Pillow

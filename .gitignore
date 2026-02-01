@@ -1,0 +1,39 @@
+# Python environment and cache
+venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*$py.class
+*.pyc
+
+# IDE and local settings
+.vscode/
+.env
+.idea/
+*.swp
+
+# Data and Outputs
+logs/
+output/
+production_output/
+test_output/
+model_cache/
+sample data/
+uploads/
+fingers/
+fingerprint/
+feature_extraction_results.json
+test_results.txt
+
+# Miscellaneous
+archive/
+old/
+sample data.zip
+research paper
+research paper - Copy
+test_results.txt
+
+# Node.js / Next.js
+node_modules/
+.next/
+out/
