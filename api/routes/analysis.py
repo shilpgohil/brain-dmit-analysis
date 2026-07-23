@@ -339,11 +339,96 @@ def _extract_extensions(ext_results: dict) -> list:
     return sorted(extensions, key=lambda x: x.primary_score, reverse=True)
 
 
-def _extract_careers(ext_results: dict) -> list:
+# Which real, already-computed DMIT profile traits best explain each career
+# field (per DMIT correlation principles used by CareerGuidanceExtension).
+# ("mi"|"personality"|"learning", trait_key, display_label)
+CAREER_TRAIT_SOURCES: dict = {
+    "technical_career": [
+        ("mi", "logical_mathematical", "Logical-Mathematical Intelligence"),
+        ("mi", "spatial", "Spatial Intelligence"),
+    ],
+    "creative_career": [
+        ("mi", "musical", "Musical Intelligence"),
+        ("mi", "spatial", "Spatial Intelligence"),
+        ("personality", "openness", "Openness"),
+    ],
+    "analytical_career": [
+        ("mi", "logical_mathematical", "Logical-Mathematical Intelligence"),
+        ("personality", "conscientiousness", "Conscientiousness"),
+    ],
+    "leadership_career": [
+        ("mi", "interpersonal", "Interpersonal Intelligence"),
+        ("personality", "extraversion", "Extraversion"),
+    ],
+    "social_career": [
+        ("mi", "interpersonal", "Interpersonal Intelligence"),
+        ("personality", "agreeableness", "Agreeableness"),
+    ],
+    "administrative_career": [
+        ("personality", "conscientiousness", "Conscientiousness"),
+        ("learning", "kinesthetic", "Kinesthetic Learning"),
+    ],
+    "research_career": [
+        ("mi", "logical_mathematical", "Logical-Mathematical Intelligence"),
+        ("mi", "naturalistic", "Naturalistic Intelligence"),
+        ("personality", "openness", "Openness"),
+    ],
+    "entrepreneurial_career": [
+        ("personality", "openness", "Openness"),
+        ("personality", "extraversion", "Extraversion"),
+    ],
+}
+CAREER_TRAIT_SOURCES["stem_careers"] = (
+    CAREER_TRAIT_SOURCES["technical_career"] + CAREER_TRAIT_SOURCES["analytical_career"]
+)
+CAREER_TRAIT_SOURCES["arts_media_careers"] = (
+    CAREER_TRAIT_SOURCES["creative_career"] + CAREER_TRAIT_SOURCES["social_career"]
+)
+CAREER_TRAIT_SOURCES["business_careers"] = (
+    CAREER_TRAIT_SOURCES["leadership_career"] + CAREER_TRAIT_SOURCES["administrative_career"]
+    + CAREER_TRAIT_SOURCES["entrepreneurial_career"]
+)
+CAREER_TRAIT_SOURCES["service_careers"] = (
+    CAREER_TRAIT_SOURCES["social_career"] + CAREER_TRAIT_SOURCES["administrative_career"]
+)
+CAREER_TRAIT_SOURCES["innovation_careers"] = (
+    CAREER_TRAIT_SOURCES["creative_career"] + CAREER_TRAIT_SOURCES["research_career"]
+    + CAREER_TRAIT_SOURCES["entrepreneurial_career"]
+)
+
+STRENGTH_THRESHOLD = 0.55
+
+
+def _key_strengths_for(field_key: str, agg: dict) -> list:
+    """
+    Surface the real, already-computed MI/personality/learning traits that
+    justify a career match. Only traits that were actually measured (not
+    None) and clear the strength threshold are reported — never fabricated.
+    """
+    sources = {
+        "mi": agg.get("multiple_intelligences") or {},
+        "personality": agg.get("personality_behavior") or {},
+        "learning": agg.get("learning_styles") or {},
+    }
+    candidates = []
+    seen = set()
+    for source, trait_key, label in CAREER_TRAIT_SOURCES.get(field_key, []):
+        if label in seen:
+            continue
+        value = sources[source].get(trait_key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= STRENGTH_THRESHOLD:
+            candidates.append((label, float(value)))
+            seen.add(label)
+    candidates.sort(key=lambda item: item[1], reverse=True)
+    return [f"{label} ({round(value * 100)}%)" for label, value in candidates[:3]]
+
+
+def _extract_careers(ext_results: dict, agg: Optional[dict] = None) -> list:
     careers = []
-    career_data = ext_results.get("career_guidance", {})
+    career_data = ext_results.get("CareerGuidanceExtension", {})
     if not isinstance(career_data, dict):
         career_data = {}
+    agg = agg or {}
 
     for field_key, (title, category) in CAREER_FIELD_LABELS.items():
         score = career_data.get(field_key)
@@ -353,13 +438,13 @@ def _extract_careers(ext_results: dict) -> list:
                     title=title,
                     category=category,
                     match_score=float(score),
-                    key_strengths=[],
+                    key_strengths=_key_strengths_for(field_key, agg),
                 )
             )
 
     # Fallback: entrepreneurial extension
     if not careers:
-        ent = ext_results.get("entrepreneurial_aptitude", {})
+        ent = ext_results.get("EntrepreneurialAptitudeExtension", {})
         if isinstance(ent, dict):
             for k, v in ent.items():
                 if isinstance(v, (int, float)) and v > 0 and k not in ("overall", "score"):
@@ -479,7 +564,7 @@ def _run_pipeline_sync(session_id: str, use_preprocessing: bool, generate_pdf: b
             personality=_extract_personality(agg),
             atd_analysis=_extract_atd(agg),
             extensions=_extract_extensions(ext_results),
-            career_matches=_extract_careers(ext_results),
+            career_matches=_extract_careers(ext_results, agg),
             pipeline_stages=[PipelineStage(**s) for s in session["pipeline_stages"]],
             total_features_extracted=sum(
                 len(r.get("feature_extraction", {}).get("consolidated_features", {}))
@@ -571,15 +656,20 @@ async def run_analysis(body: AnalyzeRequest, background_tasks: BackgroundTasks):
     return {"session_id": session_id, "status": "started"}
 
 
-def _palm_captures(session: dict) -> list:
+def _palm_captures(session: dict, atd: Optional[AtdAnalysis] = None) -> list:
     palms = []
     for slot, path in (session.get("palm_slots") or {}).items():
+        hand_label = palm_hand_label(slot)
+        hand_result = None
+        if atd is not None:
+            hand_result = atd.left_hand if hand_label == "Left" else atd.right_hand
+        status = "analyzed" if hand_result is not None else "pending_analysis"
         palms.append(
             PalmCapture(
-                hand=palm_hand_label(slot),
+                hand=hand_label,
                 slot=slot.upper(),
                 thumbnail_url=thumbnail_url_for_path(path),
-                status="pending_analysis",
+                status=status,
             )
         )
     return palms
@@ -591,7 +681,6 @@ async def get_analysis(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
 
     session = session_store[session_id]
-    palms = _palm_captures(session)
 
     if "result" in session:
         r = session["result"]
@@ -599,7 +688,7 @@ async def get_analysis(session_id: str):
             r = AnalysisResult(**r)
             session["result"] = r
         r.pipeline_stages = [PipelineStage(**s) for s in session.get("pipeline_stages", [])]
-        r.palms = palms
+        r.palms = _palm_captures(session, r.atd_analysis)
         if session.get("report_path") and not r.report_url:
             r.report_url = f"/api/analysis/{session_id}/report/download"
         return r
@@ -612,7 +701,7 @@ async def get_analysis(session_id: str):
             created_at=session["created_at"],
             error_message=session.get("error", "Analysis failed"),
             pipeline_stages=[PipelineStage(**s) for s in session.get("pipeline_stages", [])],
-            palms=palms,
+            palms=_palm_captures(session),
             warnings=[],
         )
 
@@ -622,7 +711,7 @@ async def get_analysis(session_id: str):
         subject_name=session.get("subject_name"),
         created_at=session["created_at"],
         pipeline_stages=[PipelineStage(**s) for s in session.get("pipeline_stages", [])],
-        palms=palms,
+        palms=_palm_captures(session),
         warnings=[],
     )
 

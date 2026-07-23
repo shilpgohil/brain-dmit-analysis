@@ -54,6 +54,20 @@ LEADERSHIP_KEYS = [
     'achievement_drive',                  # MotivationDriveExtension
 ]
 
+# Must stay in sync with CAREER_FIELD_LABELS in api/routes/analysis.py so the
+# same CareerGuidanceExtension score displays the same title in the PDF and
+# the dashboard/API response.
+CAREER_FIELD_TITLES = {
+    'technical_career': 'Technology & Engineering',
+    'creative_career': 'Arts, Media & Design',
+    'analytical_career': 'Research & Analysis',
+    'leadership_career': 'Management & Leadership',
+    'social_career': 'People & Service',
+    'administrative_career': 'Operations & Administration',
+    'research_career': 'Science & Investigation',
+    'entrepreneurial_career': 'Entrepreneurship & Ventures',
+}
+
 STREAM_SUITABILITY = {
     'Science': ['logical_mathematical', 'spatial', 'naturalistic'],
     'Commerce': ['logical_mathematical', 'interpersonal', 'linguistic'],
@@ -256,7 +270,7 @@ def build_career(ext_results: Dict[str, Any], career_matches: List[Dict[str, Any
             ]
             for f in career_fields:
                 if f in cg and isinstance(cg[f], (int, float)):
-                    career_scores[_label(f.replace('_career', ''))] = float(cg[f])
+                    career_scores[CAREER_FIELD_TITLES[f]] = float(cg[f])
 
     if not career_scores and career_matches:
         career_scores = {c.get('title', ''): c.get('match_score', 0)

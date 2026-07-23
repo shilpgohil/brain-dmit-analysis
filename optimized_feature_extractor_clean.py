@@ -247,26 +247,32 @@ class OptimizedFeatureExtractor:
         3. Signal-to-noise ratio
         """
         try:
-            # 1. Local contrast - normalized for fingerprints (typical std 30-80)
+            # 1. Local contrast. Calibrated across both phone-photo captures (std
+            # roughly 20-40) and 500dpi scanner ridge crops (std roughly 55-90) so
+            # neither regime saturates at the ceiling — a saturated score can never
+            # discriminate between two genuinely different images.
             std_dev = np.std(image)
-            contrast_score = min(std_dev / 40.0, 1.0)  # Fingerprints have std ~40-60
-            
+            contrast_score = min(std_dev / 90.0, 1.0)
+
             # 2. Ridge clarity - Gabor filter response for ridge detection
             # Use Laplacian as proxy for ridge sharpness
             laplacian = cv2.Laplacian(image, cv2.CV_64F)
             ridge_clarity = np.mean(np.abs(laplacian))
-            clarity_score = min(ridge_clarity / 15.0, 1.0)  # Typical fingerprint ~10-20
-            
-            # 3. Signal-to-noise ratio
-            # Compare high-frequency (noise) vs low-frequency (signal)
+            clarity_score = min(ridge_clarity / 45.0, 1.0)  # Scanner ridge crops ~20-40
+
+            # 3. Signal-to-noise ratio: high-frequency residual vs a Gaussian-blurred
+            # version of the image. On dense ridge crops this residual is dominated
+            # by ridge edges themselves (roughly 20-35), not sensor noise, so the
+            # divisor is calibrated above that band to avoid floor-clamping every
+            # legitimate scanner image to 0.
             blurred = cv2.GaussianBlur(image, (7, 7), 2)
             high_freq = np.std(image.astype(float) - blurred.astype(float))
-            snr_score = max(0, 1.0 - high_freq / 15.0)  # Lower high-freq = better
-            
+            snr_score = max(0, 1.0 - high_freq / 60.0)
+
             # 4. Histogram spread (good fingerprints use full dynamic range)
             hist_range = np.percentile(image, 95) - np.percentile(image, 5)
-            range_score = min(hist_range / 150.0, 1.0)  # Typical ~100-200
-            
+            range_score = min(hist_range / 240.0, 1.0)  # Scanner crops ~170-230
+
             # Combine with weights optimized for fingerprints
             quality_score = (
                 contrast_score * 0.30 +
@@ -274,9 +280,9 @@ class OptimizedFeatureExtractor:
                 snr_score * 0.20 +
                 range_score * 0.20
             )
-            
+
             return float(quality_score)
-            
+
         except Exception as e:
             raise ValueError(f"Image quality could not be assessed: {e}") from e
     

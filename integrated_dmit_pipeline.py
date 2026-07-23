@@ -373,6 +373,15 @@ class IntegratedDMITPipeline:
         ls = {k: v for k, v in (agg_ls or {}).items() if isinstance(v, (int, float))}
         pb = {k: v for k, v in (agg_pb or {}).items() if isinstance(v, (int, float))}
 
+        def mix(*weighted: Tuple[Optional[float], float]) -> Optional[float]:
+            """Weighted composite of several traits; None if any component is absent."""
+            vals = []
+            for val, weight in weighted:
+                if val is None:
+                    return None
+                vals.append(float(val) * weight)
+            return sum(vals)
+
         def blend(scores: Dict[str, Any], primary_key: str, anchor: Optional[float], weight: float = 0.38):
             if anchor is None or primary_key not in scores:
                 return
@@ -381,59 +390,83 @@ class IntegratedDMITPipeline:
                 return
             scores[primary_key] = max(0.0, min(1.0, (1.0 - weight) * float(raw) + weight * float(anchor)))
 
-        # (extension class name, primary score key, anchor value)
+        lm = mi.get('logical_mathematical')
+        l_ = mi.get('linguistic')
+        s_ = mi.get('spatial')
+        mu = mi.get('musical')
+        bk = mi.get('bodily_kinesthetic')
+        ip = mi.get('interpersonal')
+        ia = mi.get('intrapersonal')
+        n_ = mi.get('naturalistic')
+        o_ = pb.get('openness')
+        c_ = pb.get('conscientiousness')
+        e_ = pb.get('extraversion')
+        a_ = pb.get('agreeableness')
+        ne = pb.get('neuroticism')
+        ne_inv = (1.0 - ne) if ne is not None else None
+        ls_k = ls.get('kinesthetic')
+
+        # (extension class name, primary score key, anchor value). Each anchor below is a
+        # unique trait or unique weighted composite so extensions that share a conceptual
+        # neighborhood (e.g. all "conscientiousness-adjacent") still diverge after blending,
+        # instead of every module in the group collapsing onto one identical value.
         anchors: List[Tuple[str, str, Optional[float]]] = [
-            ('LinguisticIntelligenceExtension', 'linguistic_intelligence_score', mi.get('linguistic')),
-            ('LogicalMathematicalIntelligenceExtension', 'logical_mathematical_intelligence_score', mi.get('logical_mathematical')),
-            ('SpatialIntelligenceExtension', 'spatial_intelligence_score', mi.get('spatial')),
-            ('MusicalIntelligenceExtension', 'musical_intelligence_score', mi.get('musical')),
-            ('BodilyKinestheticIntelligenceExtension', 'bodily_kinesthetic_intelligence_score', mi.get('bodily_kinesthetic')),
-            ('InterpersonalIntelligenceExtension', 'interpersonal_intelligence_score', mi.get('interpersonal')),
-            ('IntrapersonalIntelligenceExtension', 'intrapersonal_intelligence_score', mi.get('intrapersonal')),
-            ('NaturalisticIntelligenceExtension', 'naturalistic_intelligence_score', mi.get('naturalistic')),
-            ('EmotionalIntelligenceExtension', 'emotional_intelligence_score', mi.get('interpersonal')),
-            ('CreativityIndexExtension', 'creativity_index_score',
-             (mi.get('spatial'), mi.get('musical')) and (
-                 0.55 * (mi.get('spatial') or 0) + 0.45 * (mi.get('musical') or 0))),
-            ('InnovationIntelligenceExtension', 'innovation_intelligence_score', mi.get('spatial')),
-            ('LeadershipPotentialExtension', 'leadership_potential_score',
-             (mi.get('interpersonal'), mi.get('logical_mathematical')) and (
-                 0.6 * (mi.get('interpersonal') or 0) + 0.4 * (mi.get('logical_mathematical') or 0))),
-            ('CareerGuidanceExtension', 'career_potential_score', mi.get('logical_mathematical')),
-            ('LearningStyleExtension', 'learning_effectiveness_score',
-             max(ls.values()) if ls else None),
-            ('MotivationDriveExtension', 'motivation_drive_score', pb.get('conscientiousness')),
-            ('MetaCognitionExtension', 'meta_cognition_score', mi.get('intrapersonal')),
-            ('SystemsThinkingExtension', 'systems_thinking_score', mi.get('logical_mathematical')),
-            ('LearningAgilityExtension', 'learning_agility_score', ls.get('kinesthetic')),
-            ('SustainabilityIntelligenceExtension', 'sustainability_intelligence_score', mi.get('naturalistic')),
-            ('CognitiveLoadExtension', 'cognitive_load_management_score', mi.get('logical_mathematical')),
-            ('ExecutiveFunctionExtension', 'executive_function_score', pb.get('conscientiousness')),
-            ('HealthWellnessExtension', 'health_wellness_score', pb.get('neuroticism') and (1.0 - pb['neuroticism'])),
-            ('EntrepreneurialAptitudeExtension', 'entrepreneurial_aptitude_score', mi.get('logical_mathematical')),
-            ('SelfRegulationExtension', 'self_regulation_score', pb.get('conscientiousness')),
-            ('SocialAwarenessExtension', 'social_awareness_score', mi.get('interpersonal')),
-            ('CommunicationStyleExtension', 'communication_effectiveness_score', mi.get('linguistic')),
-            ('RelationshipDynamicsExtension', 'relationship_dynamics_index', mi.get('interpersonal')),
-            ('RiskToleranceExtension', 'risk_tolerance_index', pb.get('openness')),
-            ('CuriosityExploratoryExtension', 'curiosity_exploratory_score', pb.get('openness')),
-            ('PersistenceGritExtension', 'persistence_grit_score', pb.get('conscientiousness')),
-            ('DigitalIntelligenceExtension', 'digital_intelligence_score', mi.get('logical_mathematical')),
-            ('CulturalIntelligenceExtension', 'cultural_intelligence_score', mi.get('interpersonal')),
-            ('FinancialIntelligenceExtension', 'financial_intelligence_score', mi.get('logical_mathematical')),
-            ('TeamCollaborationExtension', 'team_collaboration_score', mi.get('interpersonal')),
-            ('TimeManagementExtension', 'time_management_score', pb.get('conscientiousness')),
-            ('WorkStyleExtension', 'work_style_score', pb.get('conscientiousness')),
-            ('AdaptabilityResilienceExtension', 'adaptability_resilience_score', pb.get('openness')),
-            ('WellnessIntelligenceExtension', 'wellness_intelligence_score',
-             pb.get('neuroticism') and (1.0 - pb['neuroticism'])),
-            ('StressResponseExtension', 'stress_response_score',
-             pb.get('neuroticism') and (1.0 - pb['neuroticism'])),
-            ('ProblemSolvingExtension', 'problem_solving_score', mi.get('logical_mathematical')),
-            ('PatternRecognitionExtension', 'pattern_recognition_index', mi.get('spatial')),
-            ('DecisionMakingExtension', 'decision_making_score', mi.get('logical_mathematical')),
-            ('AttentionFocusExtension', 'attention_focus_score', mi.get('intrapersonal')),
-            ('MemoryProcessingExtension', 'memory_processing_score', mi.get('linguistic')),
+            ('LinguisticIntelligenceExtension', 'linguistic_intelligence_score', l_),
+            ('CommunicationStyleExtension', 'communication_effectiveness_score', mix((l_, 0.6), (e_, 0.4))),
+            ('MemoryProcessingExtension', 'memory_processing_score', mix((l_, 0.6), (ia, 0.4))),
+
+            ('LogicalMathematicalIntelligenceExtension', 'logical_mathematical_intelligence_score', lm),
+            ('CareerGuidanceExtension', 'career_potential_score', mix((lm, 0.6), (o_, 0.4))),
+            ('SystemsThinkingExtension', 'systems_thinking_score', mix((lm, 0.6), (ia, 0.4))),
+            ('CognitiveLoadExtension', 'cognitive_load_management_score', mix((lm, 0.6), (c_, 0.4))),
+            ('EntrepreneurialAptitudeExtension', 'entrepreneurial_aptitude_score',
+             mix((lm, 0.5), (ip, 0.3), (o_, 0.2))),
+            ('DigitalIntelligenceExtension', 'digital_intelligence_score', mix((lm, 0.6), (s_, 0.4))),
+            ('FinancialIntelligenceExtension', 'financial_intelligence_score', mix((lm, 0.6), (ne_inv, 0.4))),
+            ('ProblemSolvingExtension', 'problem_solving_score', mix((lm, 0.6), (ls_k, 0.4))),
+            ('DecisionMakingExtension', 'decision_making_score', mix((lm, 0.6), (a_, 0.4))),
+
+            ('SpatialIntelligenceExtension', 'spatial_intelligence_score', s_),
+            ('InnovationIntelligenceExtension', 'innovation_intelligence_score', mix((s_, 0.6), (o_, 0.4))),
+            ('PatternRecognitionExtension', 'pattern_recognition_index', mix((s_, 0.6), (lm, 0.4))),
+
+            ('MusicalIntelligenceExtension', 'musical_intelligence_score', mu),
+            ('BodilyKinestheticIntelligenceExtension', 'bodily_kinesthetic_intelligence_score', bk),
+
+            ('InterpersonalIntelligenceExtension', 'interpersonal_intelligence_score', ip),
+            ('EmotionalIntelligenceExtension', 'emotional_intelligence_score', mix((ip, 0.6), (ia, 0.4))),
+            ('SocialAwarenessExtension', 'social_awareness_score', mix((ip, 0.6), (o_, 0.4))),
+            ('RelationshipDynamicsExtension', 'relationship_dynamics_index', mix((ip, 0.6), (a_, 0.4))),
+            ('CulturalIntelligenceExtension', 'cultural_intelligence_score', mix((ip, 0.6), (e_, 0.4))),
+            ('TeamCollaborationExtension', 'team_collaboration_score', mix((ip, 0.6), (c_, 0.4))),
+            ('LeadershipPotentialExtension', 'leadership_potential_score', mix((ip, 0.6), (lm, 0.4))),
+
+            ('IntrapersonalIntelligenceExtension', 'intrapersonal_intelligence_score', ia),
+            ('MetaCognitionExtension', 'meta_cognition_score', mix((ia, 0.6), (lm, 0.4))),
+            ('AttentionFocusExtension', 'attention_focus_score', mix((ia, 0.6), (c_, 0.4))),
+
+            ('NaturalisticIntelligenceExtension', 'naturalistic_intelligence_score', n_),
+            ('SustainabilityIntelligenceExtension', 'sustainability_intelligence_score', mix((n_, 0.6), (o_, 0.4))),
+
+            ('CreativityIndexExtension', 'creativity_index_score', mix((s_, 0.55), (mu, 0.45))),
+
+            ('LearningStyleExtension', 'learning_effectiveness_score', max(ls.values()) if ls else None),
+            ('LearningAgilityExtension', 'learning_agility_score', ls_k),
+
+            ('MotivationDriveExtension', 'motivation_drive_score', c_),
+            ('ExecutiveFunctionExtension', 'executive_function_score', mix((c_, 0.6), (lm, 0.4))),
+            ('SelfRegulationExtension', 'self_regulation_score', mix((c_, 0.6), (ne_inv, 0.4))),
+            ('PersistenceGritExtension', 'persistence_grit_score', mix((c_, 0.6), (o_, 0.4))),
+            ('TimeManagementExtension', 'time_management_score', mix((c_, 0.6), (ia, 0.4))),
+            ('WorkStyleExtension', 'work_style_score', mix((c_, 0.6), (e_, 0.4))),
+
+            ('RiskToleranceExtension', 'risk_tolerance_index', o_),
+            ('CuriosityExploratoryExtension', 'curiosity_exploratory_score', mix((o_, 0.6), (n_, 0.4))),
+            ('AdaptabilityResilienceExtension', 'adaptability_resilience_score', mix((o_, 0.6), (ne_inv, 0.4))),
+
+            ('HealthWellnessExtension', 'health_wellness_score', ne_inv),
+            ('WellnessIntelligenceExtension', 'wellness_intelligence_score', mix((ne_inv, 0.6), (c_, 0.4))),
+            ('StressResponseExtension', 'stress_response_score', mix((ne_inv, 0.6), (ia, 0.4))),
         ]
 
         for ext_name, primary_key, anchor in anchors:

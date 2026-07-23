@@ -23,8 +23,15 @@ _IN_FLIGHT_STATUSES = {
 
 
 def init_store() -> None:
-    global session_store
-    session_store = load_all_sessions()
+    # Mutate the existing dict in place rather than rebinding `session_store`
+    # to a new object. Route modules (sessions.py, analysis.py) are imported
+    # — and bind their own local name via `from api.store import session_store`
+    # — before this runs, so reassigning the module attribute would orphan
+    # their reference to the pre-init empty dict: every session created via
+    # the API would silently vanish into a dict that persistence and the
+    # health check could never see, and nothing would ever reach SQLite.
+    session_store.clear()
+    session_store.update(load_all_sessions())
 
     # Recover sessions stranded mid-run by a previous server shutdown.
     for session_id, session in session_store.items():
