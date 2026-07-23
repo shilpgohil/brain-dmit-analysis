@@ -10,7 +10,7 @@ class LeadershipExtension(DMITExtensionBase):
         # Extract comprehensive fingerprint features for leadership analysis
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -69,12 +69,12 @@ class LeadershipExtension(DMITExtensionBase):
         )
         leadership_score = max(0.0, min(1.0, leadership_score))
         leadership_styles = {
-            'visionary': strategic_vision + innovation,
-            'influential': influence + communication,
-            'decisive': decision_making + resilience,
-            'team_builder': team_building + adaptability,
-            'adaptive': adaptability + resilience,
-            'innovative': innovation + strategic_vision
+            'visionary': (strategic_vision + innovation) / 2,
+            'influential': (influence + communication) / 2,
+            'decisive': (decision_making + resilience) / 2,
+            'team_builder': (team_building + adaptability) / 2,
+            'adaptive': (adaptability + resilience) / 2,
+            'innovative': (innovation + strategic_vision) / 2
         }
         primary_style = max(leadership_styles.items(), key=lambda x: x[1])[0]
         return {
@@ -109,7 +109,7 @@ class LeadershipExtension(DMITExtensionBase):
         info_score = (information_dimension - 1.5) / 0.5 if 1.5 <= information_dimension <= 2.0 else 0.5
         return min(1.0, corr_score * 0.3 + density_score * 0.25 + centrality_score * 0.25 + info_score * 0.2)
     def _calculate_decision_making(self, tfrc: int, box_counting_dimension: float, h1_num_features: int, betti_1: int) -> float:
-        ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500 if tfrc > 0 else 0.0
         fractal_score = (box_counting_dimension - 1.5) / 0.5 if 1.5 <= box_counting_dimension <= 2.0 else 0.5
         h1_score = min(1.0, h1_num_features / 10.0)
         betti_score = min(1.0, betti_1 / 10.0)

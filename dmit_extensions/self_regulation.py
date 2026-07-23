@@ -11,7 +11,7 @@ class SelfRegulationExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class SelfRegulationExtension(DMITExtensionBase):
         
         # Determine self regulation style based on dominant features
         regulation_styles = {
-            'emotional': emotional_control + self_monitoring,
-            'impulsive': impulse_management + attention_control,
-            'disciplined': self_discipline + goal_persistence,
-            'behavioral': behavioral_regulation + adaptive_control,
-            'attentive': attention_control + emotional_control,
-            'persistent': goal_persistence + self_discipline
+            'emotional': (emotional_control + self_monitoring) / 2,
+            'impulsive': (impulse_management + attention_control) / 2,
+            'disciplined': (self_discipline + goal_persistence) / 2,
+            'behavioral': (behavioral_regulation + adaptive_control) / 2,
+            'attentive': (attention_control + emotional_control) / 2,
+            'persistent': (goal_persistence + self_discipline) / 2
         }
         primary_style = max(regulation_styles.items(), key=lambda x: x[1])[0]
         
@@ -134,11 +134,11 @@ class SelfRegulationExtension(DMITExtensionBase):
             'goal_persistence': goal_persistence,
             'self_monitoring': self_monitoring,
             'adaptive_control': adaptive_control,
-            'emotional_stability': emotional_control + self_monitoring,
-            'behavioral_consistency': behavioral_regulation + self_discipline,
-            'cognitive_control': attention_control + impulse_management,
-            'goal_orientation': goal_persistence + adaptive_control,
-            'self_awareness': self_monitoring + emotional_control,
+            'emotional_stability': (emotional_control + self_monitoring) / 2,
+            'behavioral_consistency': (behavioral_regulation + self_discipline) / 2,
+            'cognitive_control': (attention_control + impulse_management) / 2,
+            'goal_orientation': (goal_persistence + adaptive_control) / 2,
+            'self_awareness': (self_monitoring + emotional_control) / 2,
             'regulation_profile': self.classify_regulation_level(self_regulation_score)
         }
 
@@ -275,10 +275,7 @@ class SelfRegulationExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = goal persistence
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

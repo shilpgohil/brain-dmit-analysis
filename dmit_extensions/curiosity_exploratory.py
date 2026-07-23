@@ -11,7 +11,7 @@ class CuriosityExploratoryExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class CuriosityExploratoryExtension(DMITExtensionBase):
         
         # Determine curiosity exploratory style based on dominant features
         curiosity_styles = {
-            'intellectual_explorer': intellectual_curiosity + knowledge_seeking,
-            'sensory_explorer': sensory_exploration + novelty_seeking,
-            'cognitive_explorer': cognitive_exploration + adaptive_exploration,
-            'behavioral_explorer': behavioral_exploration + risk_taking_exploration,
-            'novelty_seeker': novelty_seeking + sensory_exploration,
+            'intellectual_explorer': (intellectual_curiosity + knowledge_seeking) / 2,
+            'sensory_explorer': (sensory_exploration + novelty_seeking) / 2,
+            'cognitive_explorer': (cognitive_exploration + adaptive_exploration) / 2,
+            'behavioral_explorer': (behavioral_exploration + risk_taking_exploration) / 2,
+            'novelty_seeker': (novelty_seeking + sensory_exploration) / 2,
             'balanced_explorer': (intellectual_curiosity + behavioral_exploration) / 2
         }
         primary_style = max(curiosity_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class CuriosityExploratoryExtension(DMITExtensionBase):
             'novelty_seeking': novelty_seeking,
             'risk_taking_exploration': risk_taking_exploration,
             'adaptive_exploration': adaptive_exploration,
-            'learning_curiosity': intellectual_curiosity + knowledge_seeking,
-            'experiential_exploration': sensory_exploration + behavioral_exploration,
-            'discovery_orientation': cognitive_exploration + adaptive_exploration,
-            'adventure_seeking': novelty_seeking + risk_taking_exploration,
-            'investigative_curiosity': intellectual_curiosity + cognitive_exploration,
+            'learning_curiosity': (intellectual_curiosity + knowledge_seeking) / 2,
+            'experiential_exploration': (sensory_exploration + behavioral_exploration) / 2,
+            'discovery_orientation': (cognitive_exploration + adaptive_exploration) / 2,
+            'adventure_seeking': (novelty_seeking + risk_taking_exploration) / 2,
+            'investigative_curiosity': (intellectual_curiosity + cognitive_exploration) / 2,
             'curiosity_exploratory_profile': self.classify_curiosity_level(curiosity_exploratory_score)
         }
 
@@ -250,10 +250,7 @@ class CuriosityExploratoryExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = knowledge seeking
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

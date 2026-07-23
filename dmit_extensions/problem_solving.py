@@ -11,7 +11,7 @@ class ProblemSolvingExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class ProblemSolvingExtension(DMITExtensionBase):
         
         # Determine problem solving style based on dominant features
         problem_solving_styles = {
-            'analytical_solver': analytical_thinking + critical_analysis,
-            'logical_solver': logical_reasoning + methodical_thinking,
-            'creative_solver': creative_problem_solving + strategic_planning,
-            'systematic_solver': systematic_approach + adaptive_problem_solving,
-            'strategic_solver': strategic_planning + analytical_thinking,
+            'analytical_solver': (analytical_thinking + critical_analysis) / 2,
+            'logical_solver': (logical_reasoning + methodical_thinking) / 2,
+            'creative_solver': (creative_problem_solving + strategic_planning) / 2,
+            'systematic_solver': (systematic_approach + adaptive_problem_solving) / 2,
+            'strategic_solver': (strategic_planning + analytical_thinking) / 2,
             'balanced_solver': (analytical_thinking + logical_reasoning) / 2
         }
         primary_style = max(problem_solving_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class ProblemSolvingExtension(DMITExtensionBase):
             'methodical_thinking': methodical_thinking,
             'strategic_planning': strategic_planning,
             'adaptive_problem_solving': adaptive_problem_solving,
-            'analytical_capacity': analytical_thinking + critical_analysis,
-            'logical_capacity': logical_reasoning + methodical_thinking,
-            'creative_capacity': creative_problem_solving + strategic_planning,
-            'systematic_capacity': systematic_approach + adaptive_problem_solving,
-            'problem_solving_efficiency': analytical_thinking + logical_reasoning,
+            'analytical_capacity': (analytical_thinking + critical_analysis) / 2,
+            'logical_capacity': (logical_reasoning + methodical_thinking) / 2,
+            'creative_capacity': (creative_problem_solving + strategic_planning) / 2,
+            'systematic_capacity': (systematic_approach + adaptive_problem_solving) / 2,
+            'problem_solving_efficiency': (analytical_thinking + logical_reasoning) / 2,
             'problem_solving_profile': self.classify_problem_solving_level(problem_solving_score)
         }
 

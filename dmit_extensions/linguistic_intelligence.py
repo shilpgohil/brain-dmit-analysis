@@ -11,7 +11,7 @@ class LinguisticIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class LinguisticIntelligenceExtension(DMITExtensionBase):
         
         # Determine linguistic intelligence style based on dominant features
         linguistic_styles = {
-            'verbal_communicator': verbal_communication + language_expression,
-            'language_processor': language_processing + vocabulary_acquisition,
-            'grammar_expert': grammar_understanding + writing_skills,
-            'reading_writer': reading_comprehension + writing_skills,
-            'multilingual_learner': multilingual_capacity + vocabulary_acquisition,
+            'verbal_communicator': (verbal_communication + language_expression) / 2,
+            'language_processor': (language_processing + vocabulary_acquisition) / 2,
+            'grammar_expert': (grammar_understanding + writing_skills) / 2,
+            'reading_writer': (reading_comprehension + writing_skills) / 2,
+            'multilingual_learner': (multilingual_capacity + vocabulary_acquisition) / 2,
             'balanced_linguistic': (verbal_communication + grammar_understanding) / 2
         }
         primary_style = max(linguistic_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class LinguisticIntelligenceExtension(DMITExtensionBase):
             'writing_skills': writing_skills,
             'language_expression': language_expression,
             'multilingual_capacity': multilingual_capacity,
-            'language_fluency': verbal_communication + language_processing,
-            'literacy_skills': reading_comprehension + writing_skills,
-            'language_learning': vocabulary_acquisition + multilingual_capacity,
-            'communication_effectiveness': verbal_communication + language_expression,
-            'linguistic_competence': grammar_understanding + vocabulary_acquisition,
+            'language_fluency': (verbal_communication + language_processing) / 2,
+            'literacy_skills': (reading_comprehension + writing_skills) / 2,
+            'language_learning': (vocabulary_acquisition + multilingual_capacity) / 2,
+            'communication_effectiveness': (verbal_communication + language_expression) / 2,
+            'linguistic_competence': (grammar_understanding + vocabulary_acquisition) / 2,
             'linguistic_intelligence_profile': self.classify_linguistic_intelligence_level(linguistic_intelligence_score)
         }
 
@@ -250,10 +250,7 @@ class LinguisticIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = reading comprehension
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

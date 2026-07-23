@@ -11,7 +11,7 @@ class IntrapersonalIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class IntrapersonalIntelligenceExtension(DMITExtensionBase):
         
         # Determine intrapersonal intelligence style based on dominant features
         intrapersonal_styles = {
-            'self_aware': self_awareness + introspection,
-            'self_reflective': self_reflection + self_understanding,
-            'emotionally_regulated': emotional_self_regulation + self_motivation,
-            'personally_growing': personal_growth + self_adaptability,
-            'introspective': introspection + self_reflection,
+            'self_aware': (self_awareness + introspection) / 2,
+            'self_reflective': (self_reflection + self_understanding) / 2,
+            'emotionally_regulated': (emotional_self_regulation + self_motivation) / 2,
+            'personally_growing': (personal_growth + self_adaptability) / 2,
+            'introspective': (introspection + self_reflection) / 2,
             'balanced_intrapersonal': (self_awareness + self_understanding) / 2
         }
         primary_style = max(intrapersonal_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class IntrapersonalIntelligenceExtension(DMITExtensionBase):
             'self_motivation': self_motivation,
             'personal_growth': personal_growth,
             'self_adaptability': self_adaptability,
-            'self_knowledge': self_awareness + self_understanding,
-            'emotional_intelligence': emotional_self_regulation + self_motivation,
-            'self_development': personal_growth + self_adaptability,
-            'introspective_capacity': introspection + self_reflection,
-            'self_mastery': self_awareness + emotional_self_regulation,
+            'self_knowledge': (self_awareness + self_understanding) / 2,
+            'emotional_intelligence': (emotional_self_regulation + self_motivation) / 2,
+            'self_development': (personal_growth + self_adaptability) / 2,
+            'introspective_capacity': (introspection + self_reflection) / 2,
+            'self_mastery': (self_awareness + emotional_self_regulation) / 2,
             'intrapersonal_intelligence_profile': self.classify_intrapersonal_intelligence_level(intrapersonal_intelligence_score)
         }
 
@@ -250,10 +250,7 @@ class IntrapersonalIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = emotional self-regulation
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

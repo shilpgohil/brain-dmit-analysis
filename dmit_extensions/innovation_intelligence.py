@@ -11,7 +11,7 @@ class InnovationIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class InnovationIntelligenceExtension(DMITExtensionBase):
         
         # Determine innovation intelligence style based on dominant features
         innovation_styles = {
-            'creative': creative_thinking + innovation_intelligence,
-            'problem_solver': problem_identification + solution_generation,
-            'implementer': implementation_ability + risk_assessment,
-            'market_aware': market_understanding + innovation_optimization,
-            'optimizer': innovation_optimization + creative_thinking,
-            'intelligent': innovation_intelligence + problem_identification
+            'creative': (creative_thinking + innovation_intelligence) / 2,
+            'problem_solver': (problem_identification + solution_generation) / 2,
+            'implementer': (implementation_ability + risk_assessment) / 2,
+            'market_aware': (market_understanding + innovation_optimization) / 2,
+            'optimizer': (innovation_optimization + creative_thinking) / 2,
+            'intelligent': (innovation_intelligence + problem_identification) / 2
         }
         primary_style = max(innovation_styles.items(), key=lambda x: x[1])[0]
         
@@ -134,11 +134,11 @@ class InnovationIntelligenceExtension(DMITExtensionBase):
             'market_understanding': market_understanding,
             'innovation_optimization': innovation_optimization,
             'innovation_intelligence': innovation_intelligence,
-            'creative_innovation': creative_thinking + solution_generation,
-            'strategic_innovation': problem_identification + implementation_ability,
-            'market_innovation': market_understanding + risk_assessment,
-            'intelligent_innovation': innovation_intelligence + creative_thinking,
-            'optimized_innovation': innovation_optimization + implementation_ability,
+            'creative_innovation': (creative_thinking + solution_generation) / 2,
+            'strategic_innovation': (problem_identification + implementation_ability) / 2,
+            'market_innovation': (market_understanding + risk_assessment) / 2,
+            'intelligent_innovation': (innovation_intelligence + creative_thinking) / 2,
+            'optimized_innovation': (innovation_optimization + implementation_ability) / 2,
             'innovation_profile': self.classify_innovation_level(innovation_intelligence_score)
         }
 
@@ -202,10 +202,7 @@ class InnovationIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = solution generation
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

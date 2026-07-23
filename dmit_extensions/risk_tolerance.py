@@ -10,7 +10,7 @@ class RiskToleranceExtension(DMITExtensionBase):
         # Extract comprehensive fingerprint features for risk tolerance analysis
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -56,7 +56,7 @@ class RiskToleranceExtension(DMITExtensionBase):
         continuity_score = min(1.0, ridge_continuity)
         modularity_score = min(1.0, modularity)
         spectral_score = min(1.0, spectral_entropy)
-        tfrc_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        tfrc_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500 if tfrc > 0 else 0.0
         fractal_score = min(1.0, fractal_complexity)
         regularity_score = min(1.0, pattern_regularity)
 

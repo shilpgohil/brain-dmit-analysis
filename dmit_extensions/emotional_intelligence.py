@@ -11,7 +11,7 @@ class EmotionalIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class EmotionalIntelligenceExtension(DMITExtensionBase):
         
         # Determine emotional intelligence style based on dominant features
         emotional_styles = {
-            'aware': emotional_awareness + emotional_processing,
-            'regulated': emotional_regulation + emotional_resilience,
-            'empathetic': empathy + emotional_awareness,
-            'social': social_skills + emotional_expression,
-            'resilient': emotional_resilience + emotional_regulation,
-            'expressive': emotional_expression + emotional_awareness
+            'aware': (emotional_awareness + emotional_processing) / 2,
+            'regulated': (emotional_regulation + emotional_resilience) / 2,
+            'empathetic': (empathy + emotional_awareness) / 2,
+            'social': (social_skills + emotional_expression) / 2,
+            'resilient': (emotional_resilience + emotional_regulation) / 2,
+            'expressive': (emotional_expression + emotional_awareness) / 2
         }
         primary_style = max(emotional_styles.items(), key=lambda x: x[1])[0]
         
@@ -134,11 +134,11 @@ class EmotionalIntelligenceExtension(DMITExtensionBase):
             'emotional_memory': emotional_memory,
             'emotional_processing': emotional_processing,
             'emotional_resilience': emotional_resilience,
-            'self_awareness': emotional_awareness + emotional_processing,
-            'relationship_management': empathy + social_skills,
-            'emotional_balance': emotional_regulation + emotional_resilience,
-            'emotional_communication': emotional_expression + empathy,
-            'stress_management': emotional_resilience + emotional_regulation,
+            'self_awareness': (emotional_awareness + emotional_processing) / 2,
+            'relationship_management': (empathy + social_skills) / 2,
+            'emotional_balance': (emotional_regulation + emotional_resilience) / 2,
+            'emotional_communication': (emotional_expression + empathy) / 2,
+            'stress_management': (emotional_resilience + emotional_regulation) / 2,
             'emotional_profile': self.classify_emotional_level(emotional_intelligence_score)
         }
 
@@ -275,10 +275,7 @@ class EmotionalIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = emotional memory
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

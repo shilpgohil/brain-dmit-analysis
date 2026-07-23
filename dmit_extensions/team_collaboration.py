@@ -11,7 +11,7 @@ class TeamCollaborationExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class TeamCollaborationExtension(DMITExtensionBase):
         
         # Determine team collaboration style based on dominant features
         team_styles = {
-            'communicative_collaborator': team_communication + interpersonal_collaboration,
-            'coordinated_team_player': group_coordination + team_harmony,
-            'synergistic_problem_solver': collaborative_problem_solving + team_synergy,
-            'adaptive_team_member': adaptive_teamwork + collective_intelligence,
-            'harmonious_collaborator': team_harmony + interpersonal_collaboration,
+            'communicative_collaborator': (team_communication + interpersonal_collaboration) / 2,
+            'coordinated_team_player': (group_coordination + team_harmony) / 2,
+            'synergistic_problem_solver': (collaborative_problem_solving + team_synergy) / 2,
+            'adaptive_team_member': (adaptive_teamwork + collective_intelligence) / 2,
+            'harmonious_collaborator': (team_harmony + interpersonal_collaboration) / 2,
             'balanced_team_player': (team_communication + group_coordination) / 2
         }
         primary_style = max(team_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class TeamCollaborationExtension(DMITExtensionBase):
             'team_harmony': team_harmony,
             'interpersonal_collaboration': interpersonal_collaboration,
             'adaptive_teamwork': adaptive_teamwork,
-            'communication_capacity': team_communication + interpersonal_collaboration,
-            'coordination_capacity': group_coordination + team_harmony,
-            'synergy_capacity': collaborative_problem_solving + team_synergy,
-            'adaptability_capacity': adaptive_teamwork + collective_intelligence,
-            'team_effectiveness': team_communication + group_coordination,
+            'communication_capacity': (team_communication + interpersonal_collaboration) / 2,
+            'coordination_capacity': (group_coordination + team_harmony) / 2,
+            'synergy_capacity': (collaborative_problem_solving + team_synergy) / 2,
+            'adaptability_capacity': (adaptive_teamwork + collective_intelligence) / 2,
+            'team_effectiveness': (team_communication + group_coordination) / 2,
             'team_collaboration_profile': self.classify_team_collaboration_level(team_collaboration_score)
         }
 
@@ -250,10 +250,7 @@ class TeamCollaborationExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = collective intelligence
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

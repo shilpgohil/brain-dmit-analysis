@@ -133,38 +133,74 @@ class PDFBuilder:
             
             # Build story (content)
             story = []
-            
-            # Add cover page
+
+            # 1. Cover Page
             story.extend(self._create_cover_page(report_data))
             story.append(PageBreak())
-            
-            # Add executive summary
+
+            # 2. Executive Summary
             story.extend(self._create_executive_summary(report_data))
             story.append(PageBreak())
-            
-            # Add intelligence profile with 3D charts
+
+            # 3. Fingerprint Pattern Summary (per-finger)
+            if report_data.get('per_finger_data'):
+                story.extend(self._create_finger_pattern_section(report_data))
+                story.append(PageBreak())
+
+            # 4. Intelligence Profile
             story.extend(self._create_intelligence_profile_section(report_data))
             story.append(PageBreak())
-            
-            # Add brain mapping
+
+            # 5. Brain Mapping
             story.extend(self._create_brain_mapping_section(report_data))
             story.append(PageBreak())
-            
-            # Add career recommendations
+
+            # 6. Learning Style
+            if report_data.get('learning_styles'):
+                story.extend(self._create_learning_style_section(report_data))
+                story.append(PageBreak())
+
+            # 7. Personality Profile (Big-5)
+            if report_data.get('personality_analysis'):
+                story.extend(self._create_personality_section(report_data))
+                story.append(PageBreak())
+
+            # 8-13. Extension sections (only if extension_results present)
+            ext = report_data.get('extension_results', {})
+            if ext:
+                story.extend(self._create_eq_section(report_data))
+                story.append(PageBreak())
+
+                story.extend(self._create_cognitive_suite_section(report_data))
+                story.append(PageBreak())
+
+                story.extend(self._create_social_leadership_section(report_data))
+                story.append(PageBreak())
+
+                story.extend(self._create_motivation_creativity_section(report_data))
+                story.append(PageBreak())
+
+                story.extend(self._create_specialized_intelligences_section(report_data))
+                story.append(PageBreak())
+
+                story.extend(self._create_career_intelligence_section(report_data))
+                story.append(PageBreak())
+
+            # 14. Career Recommendations
             story.extend(self._create_career_recommendations_section(report_data))
             story.append(PageBreak())
-            
-            # Add development plan
+
+            # 15. Development Roadmap
             story.extend(self._create_development_plan_section(report_data))
             story.append(PageBreak())
-            
-            # Add technical details
+
+            # 16. Technical Details
             story.extend(self._create_technical_details_section(report_data))
             
             # Build PDF
             doc.build(story)
             
-            self.logger.info(f"✅ 3D PDF report generated successfully: {output_path}")
+            self.logger.info(f" 3D PDF report generated successfully: {output_path}")
             return output_path
             
         except Exception as e:
@@ -244,116 +280,107 @@ class PDFBuilder:
         return story
     
     def _create_executive_summary(self, report_data: Dict[str, Any]) -> list:
-        """Create executive summary section"""
+        """Create rich executive summary section"""
         story = []
-        
-        # Section title
-        title = Paragraph("Executive Summary", self.styles['CustomHeading'])
-        story.append(title)
-        
-        # Real insights
+        story.append(Paragraph("Executive Summary", self.styles['CustomHeading']))
+
         real_insights = report_data.get('real_insights', [])
-        if real_insights:
-            for insight in real_insights:
-                insight_para = Paragraph(f"• {insight}", self.styles['CustomBody'])
-                story.append(insight_para)
-                story.append(Spacer(1, 6))
-        
-        # Intelligence profile summary
-        intelligence_profile = report_data.get('intelligence_profile', {})
-        if intelligence_profile:
-            story.append(Spacer(1, 20))
-            story.append(Paragraph("Intelligence Profile Overview:", self.styles['CustomSubHeading']))
-            
-            # Find dominant intelligence
-            if intelligence_profile:
-                dominant = max(intelligence_profile.items(), key=lambda x: x[1])
-                dominant_para = Paragraph(
-                    f"Your dominant intelligence is <b>{dominant[0].replace('_', ' ').title()}</b> "
-                    f"with a score of <b>{dominant[1]:.1%}</b>.",
-                    self.styles['CustomBody']
-                )
-                story.append(dominant_para)
-        
+        for insight in real_insights:
+            story.append(Paragraph(f"• {insight}", self.styles['CustomBody']))
+            story.append(Spacer(1, 5))
+
+        # Key metrics summary table
+        intel = report_data.get('intelligence_profile', {})
+        personality = report_data.get('personality_analysis', {})
+        brain = report_data.get('brain_mapping', {})
+        learning = report_data.get('learning_styles', {})
+
+        if intel:
+            story.append(Spacer(1, 12))
+            story.append(Paragraph("Key Profile Metrics at a Glance:", self.styles['CustomSubHeading']))
+
+            dominant = max(intel.items(), key=lambda x: x[1]) if intel else ('N/A', 0)
+            weakest = min(intel.items(), key=lambda x: x[1]) if intel else ('N/A', 0)
+            dominant_hemi = 'Left' if brain.get('left_hemisphere_bias', 0.5) > brain.get('right_hemisphere_bias', 0.5) else 'Right'
+            dominant_ls = max(learning.items(), key=lambda x: x[1])[0].title() if learning else 'N/A'
+
+            # Derive personality archetype
+            archetype = 'N/A'
+            if personality:
+                try:
+                    from advanced_3d_pdf_generator.core.real_data_processor import derive_personality_archetype
+                    archetype = derive_personality_archetype(personality)
+                except Exception:
+                    pass
+
+            ext_results = report_data.get('extension_results', {})
+            eq_data = ext_results.get('EmotionalIntelligenceExtension', {})
+            eq_score = eq_data.get('emotional_intelligence_score', 0.0) if isinstance(eq_data, dict) else 0.0
+
+            summary_rows = [
+                ["Dominant Intelligence", dominant[0].replace('_', ' ').title(), f"{dominant[1]:.1%}"],
+                ["Development Area", weakest[0].replace('_', ' ').title(), f"{weakest[1]:.1%}"],
+                ["Brain Hemisphere Bias", f"{dominant_hemi} Hemisphere", ""],
+                ["Primary Learning Style", dominant_ls, ""],
+                ["Personality Archetype", archetype, ""],
+                ["Emotional Intelligence", f"{eq_score:.1%}", self._get_intelligence_level(eq_score)],
+            ]
+            t = Table(summary_rows, colWidths=[2.2*inch, 2.8*inch, 1.0*inch])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#ECF0F1')),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498DB')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Times-Bold'),
+                ('FONTNAME', (0, 1), (0, -1), 'Times-Bold'),
+                ('FONTNAME', (1, 1), (-1, -1), 'Times-Roman'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#BDC3C7')),
+            ]))
+            story.append(t)
         return story
-    
+
     def _create_intelligence_profile_section(self, report_data: Dict[str, Any]) -> list:
-        """Create intelligence profile section with 3D charts"""
+        """Create intelligence profile section with radar + ranked bar + table"""
         story = []
-        
-        # Section title
-        title = Paragraph("Intelligence Profile Analysis", self.styles['CustomHeading'])
-        story.append(title)
-        
-        # Add 3D intelligence radar chart if available
+        story.append(Paragraph("Intelligence Profile Analysis", self.styles['CustomHeading']))
+        story.append(Paragraph(
+            "Your Multiple Intelligence profile is derived from the biometric analysis of all 10 fingerprints. "
+            "Each intelligence dimension corresponds to specific brain lobe activity patterns encoded in your "
+            "dermatoglyphic features. Scores represent your natural cognitive strength in each area.",
+            self.styles['CustomBody']))
+
         charts = report_data.get('charts', {})
-        if 'intelligence_radar_3d' in charts and charts['intelligence_radar_3d']:
-            story.append(Spacer(1, 20))
-            story.append(Paragraph("3D Intelligence Radar Chart:", self.styles['CustomSubHeading']))
-            
-            # Chart explanation
-            explanation = Paragraph(
-                "<b>Chart Explanation:</b><br/>"
-                "This 3D radar chart visualizes your multiple intelligence profile across 8 different intelligence types. "
-                "Each axis represents a specific intelligence domain, and the distance from the center indicates your strength in that area. "
-                "The 3D effect provides depth and perspective, making it easier to identify your dominant and developing intelligences. "
-                "Areas with higher scores (closer to the outer edge) represent your natural strengths, while lower scores indicate areas for potential development.",
-                self.styles['CustomBody']
-            )
-            story.append(explanation)
-            story.append(Spacer(1, 15))
-            
-            # Convert base64 to image
-            try:
-                img_data = base64.b64decode(charts['intelligence_radar_3d'])
-                img_buffer = io.BytesIO(img_data)
-                img = Image(img_buffer, width=6*inch, height=4*inch)
-                story.append(img)
-                story.append(Spacer(1, 20))
-            except Exception as e:
-                self.logger.warning(f"Could not add 3D intelligence chart: {e}")
-        
-        # Intelligence scores table
+        self._insert_chart(story, charts, 'intelligence_radar_3d',
+                           '3D Intelligence Radar', 6.5*inch, 5*inch)
+        self._insert_chart(story, charts, 'intelligence_bar',
+                           'Intelligence Scores — Ranked', 6.5*inch, 4*inch)
+
         intelligence_profile = report_data.get('intelligence_profile', {})
         if intelligence_profile:
             story.append(Paragraph("Detailed Intelligence Scores:", self.styles['CustomSubHeading']))
-            
-            # Table explanation
-            table_explanation = Paragraph(
-                "<b>Table Explanation:</b><br/>"
-                "This table provides detailed numerical scores for each intelligence type. The 'Score' column shows your percentage strength "
-                "in each area (0-100%), while the 'Level' column categorizes your performance as Excellent, Good, Average, or Developing. "
-                "These scores are derived from advanced analysis of your fingerprint patterns and provide a quantitative foundation for "
-                "understanding your cognitive strengths and areas for growth.",
-                self.styles['CustomBody']
-            )
-            story.append(table_explanation)
-            story.append(Spacer(1, 15))
-            
-            # Create scores table
-            scores_data = [["Intelligence Type", "Score", "Level"]]
-            for intel_type, score in intelligence_profile.items():
-                level = self._get_intelligence_level(score)
-                scores_data.append([
-                    intel_type.replace('_', ' ').title(),
-                    f"{score:.1%}",
-                    level
-                ])
-            
-            scores_table = Table(scores_data, colWidths=[2.5*inch, 1*inch, 1.5*inch])
-            scores_table.setStyle(TableStyle([
+            header = ["Intelligence Type", "Score", "Level", "Interpretation"]
+            rows = [header]
+            for k, v in sorted(intelligence_profile.items(), key=lambda x: x[1], reverse=True):
+                level = self._get_intelligence_level(v)
+                interp = self._intelligence_interpretation(k, v)
+                rows.append([k.replace('_', ' ').title(), f"{v:.1%}", level, interp])
+            t = Table(rows, colWidths=[1.8*inch, 0.8*inch, 1.0*inch, 2.9*inch])
+            t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498DB')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Times-Bold'),
                 ('FONTNAME', (0, 1), (-1, -1), 'Times-Roman'),
-                ('FONTSIZE', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#BDC3C7'))
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('ALIGN', (1, 0), (2, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (3, 0), (3, -1), 'LEFT'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FDFEFE'), colors.HexColor('#EBF5FB')]),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#BDC3C7')),
             ]))
-            
-            story.append(scores_table)
-        
+            story.append(t)
         return story
     
     def _create_brain_mapping_section(self, report_data: Dict[str, Any]) -> list:
@@ -601,14 +628,365 @@ class PDFBuilder:
         return template
     
     def _get_intelligence_level(self, score: float) -> str:
-        """Get intelligence level based on score"""
-        if score >= 0.8:
-            return "Exceptional"
-        elif score >= 0.6:
-            return "Strong"
-        elif score >= 0.4:
-            return "Moderate"
-        elif score >= 0.2:
-            return "Developing"
-        else:
-            return "Basic" 
+        if score >= 0.80: return "Exceptional"
+        elif score >= 0.65: return "Strong"
+        elif score >= 0.50: return "Moderate"
+        elif score >= 0.35: return "Developing"
+        else: return "Basic"
+
+    def _intelligence_interpretation(self, key: str, score: float) -> str:
+        intros = {
+            'linguistic': 'Language, writing, and verbal expression',
+            'logical_mathematical': 'Reasoning, analysis, and numerical thinking',
+            'spatial': 'Visual-spatial awareness and 3-D thinking',
+            'musical': 'Rhythm, melody, and sound pattern recognition',
+            'bodily_kinesthetic': 'Physical coordination and body-mind mastery',
+            'interpersonal': 'Reading others and building relationships',
+            'intrapersonal': 'Self-awareness and inner emotional insight',
+            'naturalistic': 'Patterns in nature and biological systems',
+            'existential': 'Philosophical depth and search for meaning',
+        }
+        intro = intros.get(key, key.replace('_', ' ').title())
+        level = self._get_intelligence_level(score)
+        return f"{intro} — {level} ({score:.0%})"
+
+    # ------------------------------------------------------------------
+    # CHART INSERT HELPER
+    # ------------------------------------------------------------------
+
+    def _insert_chart(self, story: list, charts: dict, key: str,
+                      title: str, w=6*inch, h=4*inch):
+        """Safely decode and insert a base64 chart image."""
+        if not charts.get(key):
+            return
+        try:
+            img_data = base64.b64decode(charts[key])
+            img = Image(io.BytesIO(img_data), width=w, height=h)
+            story.append(Spacer(1, 10))
+            story.append(img)
+            story.append(Spacer(1, 12))
+        except Exception as e:
+            self.logger.warning(f"Could not insert chart '{key}': {e}")
+
+    def _score_table(self, rows_data: list, col_widths: list,
+                     header_colour: str = '#3498DB') -> Table:
+        """Build a consistently styled score table."""
+        t = Table(rows_data, colWidths=col_widths)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(header_colour)),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Times-Bold'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Times-Roman'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1),
+             [colors.HexColor('#FDFEFE'), colors.HexColor('#EBF5FB')]),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#BDC3C7')),
+        ]))
+        return t
+
+    # ------------------------------------------------------------------
+    # SECTION 3: FINGERPRINT PATTERN SUMMARY
+    # ------------------------------------------------------------------
+
+    def _create_finger_pattern_section(self, report_data: dict) -> list:
+        story = []
+        story.append(Paragraph("Fingerprint Pattern Summary", self.styles['CustomHeading']))
+        story.append(Paragraph(
+            "Each finger's pattern type (Arch, Loop, Whorl) is encoded in the dermatoglyphic "
+            "formation during foetal development and is directly correlated with brain lobe "
+            "development. The table below shows the biometric readings for all 10 fingerprints.",
+            self.styles['CustomBody']))
+
+        charts = report_data.get('charts', {})
+        self._insert_chart(story, charts, 'finger_pattern_bar',
+                           'Fingerprint Pattern Distribution', 6.5*inch, 4*inch)
+
+        per_finger = report_data.get('per_finger_data', [])
+        if per_finger:
+            header = ['#', 'Finger', 'Pattern', 'Quality', 'Confidence', 'Minutiae', 'TFRC']
+            rows = [header]
+            for f in per_finger:
+                rows.append([
+                    str(f.get('index', '')),
+                    str(f.get('finger_type', 'UNKNOWN')).replace('_', ' ').title(),
+                    f.get('pattern_type', '—'),
+                    f"{f.get('image_quality', 0)*100:.0f}%",
+                    f"{f.get('feature_confidence', 0)*100:.0f}%",
+                    str(f.get('minutiae_count', 0)),
+                    f"{f.get('tfrc', 0):.1f}",
+                ])
+            t = self._score_table(rows,
+                [0.3*inch, 1.1*inch, 0.9*inch, 0.7*inch, 0.8*inch, 0.7*inch, 0.7*inch],
+                '#2C3E50')
+            story.append(t)
+        return story
+
+    # ------------------------------------------------------------------
+    # SECTION 6: LEARNING STYLE
+    # ------------------------------------------------------------------
+
+    def _create_learning_style_section(self, report_data: dict) -> list:
+        story = []
+        story.append(Paragraph("Learning Style Analysis", self.styles['CustomHeading']))
+        story.append(Paragraph(
+            "Your dominant learning style reflects how you most effectively encode and retrieve "
+            "information. Dermatoglyphic patterns on the index finger (Visual) and little finger "
+            "(Visual/Auditory) provide the primary biometric basis for this mapping.",
+            self.styles['CustomBody']))
+
+        charts = report_data.get('charts', {})
+        self._insert_chart(story, charts, 'learning_styles_pie',
+                           'Learning Style Distribution', 6.5*inch, 4*inch)
+
+        ls = report_data.get('learning_styles', {})
+        if ls:
+            tips = {
+                'visual': 'Use mind-maps, diagrams, colour-coding, and visual note-taking.',
+                'auditory': 'Leverage lectures, podcasts, discussions, and verbal repetition.',
+                'kinesthetic': 'Apply hands-on practice, movement breaks, and role-playing.',
+            }
+            rows = [['Style', 'Score', 'Level', 'Recommended Strategies']]
+            for k, v in sorted(ls.items(), key=lambda x: x[1], reverse=True):
+                rows.append([k.title(), f"{v:.1%}", self._get_intelligence_level(v),
+                             tips.get(k, '—')])
+            t = self._score_table(rows,
+                [1.0*inch, 0.7*inch, 0.9*inch, 3.9*inch], '#16A085')
+            story.append(t)
+        return story
+
+    # ------------------------------------------------------------------
+    # SECTION 7: PERSONALITY (BIG-5)
+    # ------------------------------------------------------------------
+
+    def _create_personality_section(self, report_data: dict) -> list:
+        story = []
+        story.append(Paragraph("Personality Profile (Big-5)", self.styles['CustomHeading']))
+        story.append(Paragraph(
+            "The Big-5 personality dimensions are derived from the thumb fingerprint's prefrontal "
+            "lobe correlation. Openness maps to fractal complexity; Conscientiousness to pattern "
+            "regularity; Extraversion to ridge density; Agreeableness to symmetry; and Neuroticism "
+            "to spectral variance.",
+            self.styles['CustomBody']))
+
+        charts = report_data.get('charts', {})
+        self._insert_chart(story, charts, 'personality_bar',
+                           'Big-5 Personality Profile', 6.5*inch, 4*inch)
+
+        personality = report_data.get('personality_analysis', {})
+        if personality:
+            # Personality archetype
+            try:
+                from advanced_3d_pdf_generator.core.real_data_processor import derive_personality_archetype
+                archetype = derive_personality_archetype(personality)
+                story.append(Paragraph(
+                    f"<b>Personality Archetype:</b> {archetype}",
+                    self.styles['CustomBody']))
+                story.append(Spacer(1, 8))
+            except Exception:
+                pass
+
+            descs = {
+                'openness': 'Curiosity, creativity, and willingness to embrace new ideas.',
+                'conscientiousness': 'Organisation, reliability, and goal-oriented discipline.',
+                'extraversion': 'Sociability, assertiveness, and positive emotional expression.',
+                'agreeableness': 'Cooperation, trust, and empathy toward others.',
+                'neuroticism': 'Emotional reactivity, anxiety, and stress sensitivity.',
+            }
+            rows = [['Trait', 'Score', 'Level', 'Description']]
+            for k, v in sorted(personality.items(), key=lambda x: x[1], reverse=True):
+                rows.append([k.title(), f"{v:.1%}", self._get_intelligence_level(v),
+                             descs.get(k, '—')])
+            t = self._score_table(rows,
+                [1.1*inch, 0.7*inch, 0.9*inch, 3.8*inch], '#8E44AD')
+            story.append(t)
+        return story
+
+    # ------------------------------------------------------------------
+    # SECTION 8: EMOTIONAL INTELLIGENCE DEEP-DIVE
+    # ------------------------------------------------------------------
+
+    def _create_eq_section(self, report_data: dict) -> list:
+        story = []
+        story.append(Paragraph("Emotional Intelligence — Deep Dive", self.styles['CustomHeading']))
+        ext = report_data.get('extension_results', {})
+        eq = ext.get('EmotionalIntelligenceExtension', {})
+        if not isinstance(eq, dict) or 'error' in eq:
+            story.append(Paragraph("Emotional Intelligence data unavailable.", self.styles['CustomBody']))
+            return story
+
+        score = eq.get('emotional_intelligence_score', 0.0)
+        style = eq.get('primary_emotional_style', '').replace('_', ' ').title()
+        story.append(Paragraph(
+            f"Overall EQ Score: <b>{score:.1%}</b> ({self._get_intelligence_level(score)}) | "
+            f"Primary Emotional Style: <b>{style}</b>",
+            self.styles['CustomBody']))
+
+        charts = report_data.get('charts', {})
+        self._insert_chart(story, charts, 'eq_radar',
+                           'EQ 8-Dimension Radar', 6.5*inch, 5*inch)
+
+        sub_keys = ['emotional_awareness', 'emotional_regulation', 'empathy', 'social_skills',
+                    'emotional_expression', 'emotional_memory', 'emotional_processing',
+                    'emotional_resilience']
+        rows = [['EQ Dimension', 'Score', 'Level']]
+        for k in sub_keys:
+            v = float(eq.get(k, 0.0) or 0.0)
+            rows.append([k.replace('_', ' ').title(), f"{v:.1%}", self._get_intelligence_level(v)])
+        t = self._score_table(rows, [2.5*inch, 1.0*inch, 1.5*inch], '#E74C3C')
+        story.append(t)
+        return story
+
+    # ------------------------------------------------------------------
+    # GENERIC EXTENSION GROUP SECTION BUILDER
+    # ------------------------------------------------------------------
+
+    def _build_extension_group_section(self, report_data: dict,
+                                        title: str, description: str,
+                                        group_keys: list, chart_key: str,
+                                        header_colour: str) -> list:
+        story = []
+        story.append(Paragraph(title, self.styles['CustomHeading']))
+        story.append(Paragraph(description, self.styles['CustomBody']))
+
+        charts = report_data.get('charts', {})
+        self._insert_chart(story, charts, chart_key, title, 6.5*inch, max(3.5*inch, len(group_keys)*0.35*inch))
+
+        ext = report_data.get('extension_results', {})
+        try:
+            from advanced_3d_pdf_generator.core.real_data_processor import (
+                _find_main_score, _find_primary_style, EXTENSION_DISPLAY_NAMES)
+        except ImportError:
+            return story
+
+        rows = [['Extension', 'Score', 'Level', 'Primary Style']]
+        for key in group_keys:
+            data = ext.get(key, {})
+            if not isinstance(data, dict) or 'error' in data:
+                continue
+            score = _find_main_score(data)
+            style_label = _find_primary_style(data) or '—'
+            display = EXTENSION_DISPLAY_NAMES.get(key, key.replace('Extension', '').replace('_', ' '))
+            rows.append([display, f"{score:.1%}", self._get_intelligence_level(score), style_label])
+
+        if len(rows) > 1:
+            t = self._score_table(rows, [2.3*inch, 0.8*inch, 0.9*inch, 2.5*inch], header_colour)
+            story.append(t)
+        return story
+
+    # ------------------------------------------------------------------
+    # SECTION 9: COGNITIVE SUITE
+    # ------------------------------------------------------------------
+
+    def _create_cognitive_suite_section(self, report_data: dict) -> list:
+        return self._build_extension_group_section(
+            report_data,
+            title="Cognitive Abilities Suite",
+            description=(
+                "This section consolidates seven core cognitive dimensions derived from your "
+                "fingerprint topology — from decision speed and attention span to meta-cognitive "
+                "self-monitoring and working memory capacity."
+            ),
+            group_keys=[
+                'DecisionMakingExtension', 'AttentionFocusExtension', 'MemoryProcessingExtension',
+                'ExecutiveFunctionExtension', 'CognitiveLoadExtension', 'MetaCognitionExtension',
+                'LearningAgilityExtension',
+            ],
+            chart_key='cognitive_bar',
+            header_colour='#2980B9',
+        )
+
+    # ------------------------------------------------------------------
+    # SECTION 10: SOCIAL & LEADERSHIP
+    # ------------------------------------------------------------------
+
+    def _create_social_leadership_section(self, report_data: dict) -> list:
+        return self._build_extension_group_section(
+            report_data,
+            title="Social & Leadership Profile",
+            description=(
+                "Leadership potential, communication style, interpersonal intelligence, and "
+                "social awareness are mapped from the spectral and graph-theoretic features of "
+                "your fingerprint ridge network — reflecting your natural social and leadership wiring."
+            ),
+            group_keys=[
+                'LeadershipPotentialExtension', 'CommunicationStyleExtension',
+                'InterpersonalIntelligenceExtension', 'SocialAwarenessExtension',
+                'RelationshipDynamicsExtension', 'LeftRightBrainExtension',
+            ],
+            chart_key='social_bar',
+            header_colour='#16A085',
+        )
+
+    # ------------------------------------------------------------------
+    # SECTION 11: MOTIVATION, CREATIVITY & INNOVATION
+    # ------------------------------------------------------------------
+
+    def _create_motivation_creativity_section(self, report_data: dict) -> list:
+        return self._build_extension_group_section(
+            report_data,
+            title="Motivation, Creativity & Innovation",
+            description=(
+                "Creativity, entrepreneurial drive, risk appetite, curiosity, and grit are "
+                "all derivable from the fractal complexity and topological richness of your "
+                "fingerprint patterns — capturing your innate drive and innovation capacity."
+            ),
+            group_keys=[
+                'CreativityIndexExtension', 'InnovationIntelligenceExtension',
+                'EntrepreneurialAptitudeExtension', 'RiskToleranceExtension',
+                'CuriosityExploratoryExtension', 'PersistenceGritExtension',
+                'MotivationDriveExtension',
+            ],
+            chart_key='motivation_bar',
+            header_colour='#8E44AD',
+        )
+
+    # ------------------------------------------------------------------
+    # SECTION 12: SPECIALISED INTELLIGENCES
+    # ------------------------------------------------------------------
+
+    def _create_specialized_intelligences_section(self, report_data: dict) -> list:
+        return self._build_extension_group_section(
+            report_data,
+            title="Specialised Intelligence Scores",
+            description=(
+                "Gardner's theory of Multiple Intelligences is extended here with Systems "
+                "Thinking, Pattern Recognition, Wellness, and Sustainability Intelligence — "
+                "each derived from distinct biometric fingerprint features."
+            ),
+            group_keys=[
+                'LinguisticIntelligenceExtension', 'LogicalMathematicalIntelligenceExtension',
+                'SpatialIntelligenceExtension', 'MusicalIntelligenceExtension',
+                'BodilyKinestheticIntelligenceExtension', 'IntrapersonalIntelligenceExtension',
+                'NaturalisticIntelligenceExtension', 'SystemsThinkingExtension',
+                'PatternRecognitionExtension', 'WellnessIntelligenceExtension',
+                'SustainabilityIntelligenceExtension',
+            ],
+            chart_key='specialized_bar',
+            header_colour='#27AE60',
+        )
+
+    # ------------------------------------------------------------------
+    # SECTION 13: CAREER & LIFE INTELLIGENCE
+    # ------------------------------------------------------------------
+
+    def _create_career_intelligence_section(self, report_data: dict) -> list:
+        return self._build_extension_group_section(
+            report_data,
+            title="Career & Life Intelligence",
+            description=(
+                "Stress resilience, self-regulation, cultural adaptability, digital intelligence, "
+                "and financial acumen are mapped from your fingerprint's spectral entropy and "
+                "network features — giving a holistic view of your life-readiness profile."
+            ),
+            group_keys=[
+                'StressResponseExtension', 'AdaptabilityResilienceExtension',
+                'SelfRegulationExtension', 'HealthWellnessExtension',
+                'FinancialIntelligenceExtension', 'DigitalIntelligenceExtension',
+                'CulturalIntelligenceExtension', 'NeurodivergenceExtension',
+            ],
+            chart_key='career_bar',
+            header_colour='#E67E22',
+        )

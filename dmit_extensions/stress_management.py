@@ -11,7 +11,7 @@ class StressManagementExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class StressManagementExtension(DMITExtensionBase):
         
         # Determine stress management style based on dominant features
         stress_styles = {
-            'resilient_handler': stress_resilience + stress_tolerance,
-            'emotional_regulator': emotional_regulation + recovery_ability,
-            'adaptive_coper': coping_mechanisms + adaptive_response,
-            'stable_processor': mental_stability + stress_adaptation,
-            'balanced_manager': stress_resilience + emotional_regulation,
-            'recovery_focused': recovery_ability + adaptive_response
+            'resilient_handler': (stress_resilience + stress_tolerance) / 2,
+            'emotional_regulator': (emotional_regulation + recovery_ability) / 2,
+            'adaptive_coper': (coping_mechanisms + adaptive_response) / 2,
+            'stable_processor': (mental_stability + stress_adaptation) / 2,
+            'balanced_manager': (stress_resilience + emotional_regulation) / 2,
+            'recovery_focused': (recovery_ability + adaptive_response) / 2
         }
         primary_style = max(stress_styles.items(), key=lambda x: x[1])[0]
         
@@ -134,11 +134,11 @@ class StressManagementExtension(DMITExtensionBase):
             'stress_tolerance': stress_tolerance,
             'recovery_ability': recovery_ability,
             'adaptive_response': adaptive_response,
-            'resilience_capacity': stress_resilience + stress_tolerance,
-            'emotional_capacity': emotional_regulation + recovery_ability,
-            'coping_capacity': coping_mechanisms + adaptive_response,
-            'stability_capacity': mental_stability + stress_adaptation,
-            'stress_handling': stress_resilience + emotional_regulation,
+            'resilience_capacity': (stress_resilience + stress_tolerance) / 2,
+            'emotional_capacity': (emotional_regulation + recovery_ability) / 2,
+            'coping_capacity': (coping_mechanisms + adaptive_response) / 2,
+            'stability_capacity': (mental_stability + stress_adaptation) / 2,
+            'stress_handling': (stress_resilience + emotional_regulation) / 2,
             'stress_management_profile': self.classify_stress_management_level(stress_management_score)
         }
 
@@ -250,7 +250,7 @@ class StressManagementExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = mental stability
         # Ridge count contribution
         if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
+            ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500
         else:
             ridge_score = 0.0
         # Fractal dimension contribution

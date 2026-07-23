@@ -11,7 +11,7 @@ class MemoryProcessingExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class MemoryProcessingExtension(DMITExtensionBase):
         
         # Determine memory processing style based on dominant features
         memory_styles = {
-            'working': working_memory + memory_processing_speed,
-            'long_term': long_term_memory + memory_intelligence,
-            'consolidation': memory_consolidation + memory_accuracy,
-            'retrieval': memory_retrieval + memory_integration,
-            'speed': memory_processing_speed + working_memory,
-            'accurate': memory_accuracy + memory_consolidation
+            'working': (working_memory + memory_processing_speed) / 2,
+            'long_term': (long_term_memory + memory_intelligence) / 2,
+            'consolidation': (memory_consolidation + memory_accuracy) / 2,
+            'retrieval': (memory_retrieval + memory_integration) / 2,
+            'speed': (memory_processing_speed + working_memory) / 2,
+            'accurate': (memory_accuracy + memory_consolidation) / 2
         }
         primary_style = max(memory_styles.items(), key=lambda x: x[1])[0]
         
@@ -134,11 +134,13 @@ class MemoryProcessingExtension(DMITExtensionBase):
             'memory_accuracy': memory_accuracy,
             'memory_integration': memory_integration,
             'memory_intelligence': memory_intelligence,
-            'memory_capacity': working_memory + long_term_memory,
-            'memory_efficiency': memory_consolidation + memory_retrieval,
-            'memory_performance': memory_processing_speed + memory_accuracy,
-            'memory_integration': memory_integration + memory_intelligence,
-            'memory_mastery': memory_intelligence + memory_accuracy,
+            'memory_capacity': (working_memory + long_term_memory) / 2,
+            'memory_efficiency': (memory_consolidation + memory_retrieval) / 2,
+            'memory_performance': (memory_processing_speed + memory_accuracy) / 2,
+            # FIX: this composite previously reused the key 'memory_integration',
+            # silently overwriting the sub-score of the same name above.
+            'memory_integration_capacity': (memory_integration + memory_intelligence) / 2,
+            'memory_mastery': (memory_intelligence + memory_accuracy) / 2,
             'memory_profile': self.classify_memory_level(memory_processing_score)
         }
 
@@ -275,10 +277,7 @@ class MemoryProcessingExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = memory accuracy
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

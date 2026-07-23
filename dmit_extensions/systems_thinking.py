@@ -11,7 +11,7 @@ class SystemsThinkingExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class SystemsThinkingExtension(DMITExtensionBase):
         
         # Determine systems thinking style based on dominant features
         thinking_styles = {
-            'holistic': holistic_thinking + systems_intelligence,
-            'pattern': pattern_recognition + complexity_management,
-            'interconnected': interconnectedness + feedback_loops,
-            'mapping': systems_mapping + emergence_understanding,
-            'complex': complexity_management + holistic_thinking,
-            'intelligent': systems_intelligence + pattern_recognition
+            'holistic': (holistic_thinking + systems_intelligence) / 2,
+            'pattern': (pattern_recognition + complexity_management) / 2,
+            'interconnected': (interconnectedness + feedback_loops) / 2,
+            'mapping': (systems_mapping + emergence_understanding) / 2,
+            'complex': (complexity_management + holistic_thinking) / 2,
+            'intelligent': (systems_intelligence + pattern_recognition) / 2
         }
         primary_style = max(thinking_styles.items(), key=lambda x: x[1])[0]
 
@@ -134,11 +134,11 @@ class SystemsThinkingExtension(DMITExtensionBase):
             'emergence_understanding': emergence_understanding,
             'complexity_management': complexity_management,
             'systems_intelligence': systems_intelligence,
-            'big_picture_thinking': holistic_thinking + systems_mapping,
-            'pattern_analysis': pattern_recognition + complexity_management,
-            'system_understanding': interconnectedness + feedback_loops,
-            'complexity_navigation': complexity_management + emergence_understanding,
-            'systems_insight': systems_intelligence + holistic_thinking,
+            'big_picture_thinking': (holistic_thinking + systems_mapping) / 2,
+            'pattern_analysis': (pattern_recognition + complexity_management) / 2,
+            'system_understanding': (interconnectedness + feedback_loops) / 2,
+            'complexity_navigation': (complexity_management + emergence_understanding) / 2,
+            'systems_insight': (systems_intelligence + holistic_thinking) / 2,
             'thinking_profile': self.classify_thinking_level(systems_thinking_score)
         }
 
@@ -202,10 +202,7 @@ class SystemsThinkingExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = interconnectedness
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

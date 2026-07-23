@@ -8,44 +8,52 @@ class LeftRightBrainExtension(DMITExtensionBase):
     """
     def analyze(self, features: Dict[str, Any]) -> Dict[str, Any]:
         # Extract actual fingerprint features for brain analysis
-        # ATD angle features (critical for DMIT brain analysis)
-        atd_angle = features.get('atd_angle', 45.0)  # Normal range: 35-55 degrees
-        
-        # Pattern asymmetry features
-        horizontal_symmetry = features.get('horizontal_symmetry', 0.0)
-        vertical_symmetry = features.get('vertical_symmetry', 0.0)
-        pattern_asymmetry = features.get('pattern_asymmetry', 0.0)
-        
-        # Ridge count and density asymmetry
-        ridge_count_left = features.get('ridge_count_left', 0)
-        ridge_count_right = features.get('ridge_count_right', 0)
-        ridge_density_left = features.get('ridge_density_left', 0.0)
-        ridge_density_right = features.get('ridge_density_right', 0.0)
-        
+        # FIX: ATD angle is a PALM feature (not fingerprint). It is always None here.
+        # We detect this and fall back to pattern-based asymmetry analysis.
+        atd_raw = features.get('atd_average_angle') or features.get('atd_angle')
+        atd_available = atd_raw is not None and float(atd_raw) != 0.0
+        atd_angle = float(atd_raw) if atd_available else None
+
+        # Pattern asymmetry features (available from extractor)
+        horizontal_symmetry = float(features.get('horizontal_symmetry') or features.get('pattern_symmetry_score', 0.5))
+        vertical_symmetry = float(features.get('vertical_symmetry') or features.get('symmetry_index', 0.5))
+        pattern_asymmetry = float(features.get('pattern_asymmetry') or (1.0 - horizontal_symmetry))
+
+        # Ridge count and density (FIX: use normalized tfrc)
+        ridge_count_left = float(features.get('ridge_count_left') or features.get('tfrc_normalized', 0.5))
+        ridge_count_right = float(features.get('ridge_count_right') or features.get('tfrc_normalized', 0.5))
+        ridge_density_left = float(features.get('ridge_density_left') or features.get('ridge_density', 0.0))
+        ridge_density_right = float(features.get('ridge_density_right') or features.get('ridge_density', 0.0))
+
         # Fractal and complexity asymmetry
-        fractal_dimension_left = features.get('fractal_dimension_left', 1.5)
-        fractal_dimension_right = features.get('fractal_dimension_right', 1.5)
-        complexity_left = features.get('complexity_left', 0.0)
-        complexity_right = features.get('complexity_right', 0.0)
-        
-        # Graph and network asymmetry
-        graph_density_left = features.get('graph_density_left', 0.0)
-        graph_density_right = features.get('graph_density_right', 0.0)
-        spectral_radius_left = features.get('spectral_radius_left', 0.0)
-        spectral_radius_right = features.get('spectral_radius_right', 0.0)
-        
+        fractal_dimension_left = float(features.get('fractal_dimension_left') or features.get('box_counting_dimension', 1.5))
+        fractal_dimension_right = float(features.get('fractal_dimension_right') or features.get('box_counting_dimension', 1.5))
+        complexity_left = float(features.get('complexity_left') or features.get('topological_complexity', 0.0))
+        complexity_right = float(features.get('complexity_right') or features.get('topological_complexity', 0.0))
+
+        # Graph and network features
+        graph_density_left = float(features.get('graph_density_left') or features.get('graph_density', 0.0))
+        graph_density_right = float(features.get('graph_density_right') or features.get('graph_density', 0.0))
+        spectral_radius_left = float(features.get('spectral_radius_left') or features.get('spectral_radius', 0.0))
+        spectral_radius_right = float(features.get('spectral_radius_right') or features.get('spectral_radius', 0.0))
+
         # Topological asymmetry
-        euler_characteristic_left = features.get('euler_characteristic_left', 0)
-        euler_characteristic_right = features.get('euler_characteristic_right', 0)
-        topological_complexity_left = features.get('topological_complexity_left', 0.0)
-        topological_complexity_right = features.get('topological_complexity_right', 0.0)
-        
-        # Calculate brain hemispheric balance using DMIT scientific correlations
-        
-        # 1. ATD Angle Analysis (DMIT Principle: ATD angle indicates brain development balance)
-        atd_score = self._calculate_atd_score(atd_angle)
-        
-        # 2. Pattern Symmetry Analysis (DMIT Principle: Symmetry indicates balanced brain development)
+        euler_characteristic_left = int(features.get('euler_characteristic_left') or features.get('euler_characteristic', 0))
+        euler_characteristic_right = int(features.get('euler_characteristic_right') or features.get('euler_characteristic', 0))
+        topological_complexity_left = float(features.get('topological_complexity_left') or features.get('topological_complexity', 0.0))
+        topological_complexity_right = float(features.get('topological_complexity_right') or features.get('topological_complexity', 0.0))
+
+        # Pattern type for dominance inference
+        pattern_type = features.get('pattern_type', 'loop')
+
+        # 1. ATD Score — graceful fallback when ATD not available (fingerprint images)
+        if atd_available:
+            atd_score = self._calculate_atd_score(atd_angle)
+        else:
+            # Fallback: use pattern symmetry as proxy for balanced brain development
+            atd_score = self._calculate_atd_from_symmetry(horizontal_symmetry, pattern_type)
+
+        # 2. Symmetry Analysis
         symmetry_score = self._calculate_symmetry_score(horizontal_symmetry, vertical_symmetry, pattern_asymmetry)
         
         # 3. Ridge Count Asymmetry Analysis (DMIT Principle: Balanced ridge counts = balanced brain)
@@ -65,10 +73,12 @@ class LeftRightBrainExtension(DMITExtensionBase):
                                                                                  topological_complexity_left, topological_complexity_right)
         
         # Calculate left and right brain scores
-        left_brain_score = self._calculate_left_brain_score(atd_angle, ridge_count_left, fractal_dimension_left, 
-                                                          graph_density_left, euler_characteristic_left)
-        right_brain_score = self._calculate_right_brain_score(atd_angle, ridge_count_right, fractal_dimension_right,
-                                                            graph_density_right, euler_characteristic_right)
+        # FIX: Pass 45.0 (neutral ATD) when ATD is not available, to avoid NoneType math errors
+        safe_atd = atd_angle if atd_angle is not None else 45.0
+        left_brain_score = self._calculate_left_brain_score(safe_atd, ridge_count_left, fractal_dimension_left,
+                                                           graph_density_left, euler_characteristic_left)
+        right_brain_score = self._calculate_right_brain_score(safe_atd, ridge_count_right, fractal_dimension_right,
+                                                             graph_density_right, euler_characteristic_right)
         
         # Overall brain integration score (weighted combination)
         brain_integration_score = (
@@ -114,6 +124,14 @@ class LeftRightBrainExtension(DMITExtensionBase):
             'brain_profile': self.classify_brain_level(brain_integration_score)
         }
     
+    def _calculate_atd_from_symmetry(self, symmetry: float, pattern_type: str) -> float:
+        """Fallback for ATD when palm data unavailable.
+        Uses pattern symmetry as a proxy indicator for hemispheric balance.
+        Whorls tend toward stronger dominance; loops are more balanced."""
+        pattern_balance = {'arch': 0.65, 'loop': 0.75, 'whorl': 0.55, 'composite': 0.60}
+        pattern_score = pattern_balance.get(pattern_type.lower(), 0.65)
+        return (symmetry * 0.6 + pattern_score * 0.4)
+
     def _calculate_atd_score(self, atd_angle: float) -> float:
         """Calculate brain integration score from ATD angle (DMIT principle)"""
         # DMIT research shows: ATD angle 35-55 degrees indicates balanced brain development

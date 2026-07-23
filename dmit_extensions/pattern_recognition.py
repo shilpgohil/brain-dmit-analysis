@@ -10,7 +10,7 @@ class PatternRecognitionExtension(DMITExtensionBase):
         # Extract comprehensive fingerprint features for pattern recognition analysis
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -56,9 +56,12 @@ class PatternRecognitionExtension(DMITExtensionBase):
         box_dim_score = (box_counting_dimension - 1.5) / 0.5 if 1.5 <= box_counting_dimension <= 2.0 else 0.5
         entropy_score = min(1.0, entropy / 8.0)
         spectral_score = min(1.0, spectral_entropy)
-        minutiae_score = 1.0 if minutiae_density > 0.12 else 0.5
+        # FIX: the old binary threshold (> 0.12) was always true for any real
+        # print, making this component a constant 1.0. Score proportionally on
+        # the normalized [0,1] density instead.
+        minutiae_score = 0.5 + 0.5 * max(0.0, min(1.0, (minutiae_density - 0.12) / 0.48))
         ridge_score = min(1.0, ridge_density)
-        tfrc_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        tfrc_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500 if tfrc > 0 else 0.0
 
         # Weighted sum for pattern recognition index
         pattern_recognition_index = (

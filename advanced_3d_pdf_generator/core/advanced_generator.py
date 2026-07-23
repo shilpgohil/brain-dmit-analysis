@@ -57,7 +57,7 @@ class Advanced3DGenerator:
         """
         
         try:
-            self.logger.info("🎨 Generating Advanced 3D PDF Report with full customization...")
+            self.logger.info(" Generating Advanced 3D PDF Report with full customization...")
             
             # Use the simple generator with advanced options
             return Simple3DGenerator.create_report(
@@ -87,7 +87,7 @@ class Advanced3DGenerator:
         """
         
         try:
-            self.logger.info("🎨 Generating Custom 3D PDF Report...")
+            self.logger.info(" Generating Custom 3D PDF Report...")
             
             # Extract custom configuration
             output_path = custom_config.get('output_path')

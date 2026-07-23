@@ -11,7 +11,7 @@ class MetaCognitionExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class MetaCognitionExtension(DMITExtensionBase):
         
         # Determine meta cognition style based on dominant features
         meta_styles = {
-            'self_aware': self_awareness + meta_intelligence,
-            'monitoring': cognitive_monitoring + cognitive_control,
-            'strategic': learning_strategies + problem_solving_meta,
-            'problem_solver': problem_solving_meta + decision_making_meta,
-            'decision_maker': decision_making_meta + meta_optimization,
-            'controlled': cognitive_control + self_awareness
+            'self_aware': (self_awareness + meta_intelligence) / 2,
+            'monitoring': (cognitive_monitoring + cognitive_control) / 2,
+            'strategic': (learning_strategies + problem_solving_meta) / 2,
+            'problem_solver': (problem_solving_meta + decision_making_meta) / 2,
+            'decision_maker': (decision_making_meta + meta_optimization) / 2,
+            'controlled': (cognitive_control + self_awareness) / 2
         }
         primary_style = max(meta_styles.items(), key=lambda x: x[1])[0]
         
@@ -134,11 +134,11 @@ class MetaCognitionExtension(DMITExtensionBase):
             'cognitive_control': cognitive_control,
             'meta_optimization': meta_optimization,
             'meta_intelligence': meta_intelligence,
-            'awareness_control': self_awareness + cognitive_control,
-            'strategic_monitoring': cognitive_monitoring + learning_strategies,
-            'problem_decision': problem_solving_meta + decision_making_meta,
-            'intelligent_meta': meta_intelligence + self_awareness,
-            'optimized_meta': meta_optimization + cognitive_monitoring,
+            'awareness_control': (self_awareness + cognitive_control) / 2,
+            'strategic_monitoring': (cognitive_monitoring + learning_strategies) / 2,
+            'problem_decision': (problem_solving_meta + decision_making_meta) / 2,
+            'intelligent_meta': (meta_intelligence + self_awareness) / 2,
+            'optimized_meta': (meta_optimization + cognitive_monitoring) / 2,
             'meta_profile': self.classify_meta_level(meta_cognition_score)
         }
 
@@ -202,10 +202,7 @@ class MetaCognitionExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = learning strategies
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

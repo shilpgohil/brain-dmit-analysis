@@ -11,7 +11,7 @@ class WorkStyleExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class WorkStyleExtension(DMITExtensionBase):
         
         # Determine work style type based on dominant features
         work_styles = {
-            'efficient_worker': work_efficiency + productivity_patterns,
-            'organized_worker': task_organization + work_consistency,
-            'focused_professional': professional_focus + professional_behavior,
-            'adaptive_worker': work_adaptability + work_style_flexibility,
-            'consistent_performer': work_consistency + professional_behavior,
+            'efficient_worker': (work_efficiency + productivity_patterns) / 2,
+            'organized_worker': (task_organization + work_consistency) / 2,
+            'focused_professional': (professional_focus + professional_behavior) / 2,
+            'adaptive_worker': (work_adaptability + work_style_flexibility) / 2,
+            'consistent_performer': (work_consistency + professional_behavior) / 2,
             'balanced_worker': (work_efficiency + task_organization) / 2
         }
         primary_style = max(work_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class WorkStyleExtension(DMITExtensionBase):
             'work_consistency': work_consistency,
             'professional_behavior': professional_behavior,
             'work_style_flexibility': work_style_flexibility,
-            'efficiency_capacity': work_efficiency + productivity_patterns,
-            'organization_capacity': task_organization + work_consistency,
-            'focus_capacity': professional_focus + professional_behavior,
-            'adaptability_capacity': work_adaptability + work_style_flexibility,
-            'work_effectiveness': work_efficiency + task_organization,
+            'efficiency_capacity': (work_efficiency + productivity_patterns) / 2,
+            'organization_capacity': (task_organization + work_consistency) / 2,
+            'focus_capacity': (professional_focus + professional_behavior) / 2,
+            'adaptability_capacity': (work_adaptability + work_style_flexibility) / 2,
+            'work_effectiveness': (work_efficiency + task_organization) / 2,
             'work_style_profile': self.classify_work_style_level(work_style_score)
         }
 
@@ -250,10 +250,7 @@ class WorkStyleExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = productivity patterns
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

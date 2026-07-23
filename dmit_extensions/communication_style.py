@@ -11,7 +11,7 @@ class CommunicationStyleExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -136,10 +136,10 @@ class CommunicationStyleExtension(DMITExtensionBase):
             'empathetic_communication': empathetic_communication,
             'assertive_communication': assertive_communication,
             'collaborative_communication': collaborative_communication,
-            'expressive_communication': verbal_communication + non_verbal_communication,
-            'receptive_communication': active_listening + empathetic_communication,
-            'influential_communication': persuasive_communication + assertive_communication,
-            'interactive_communication': collaborative_communication + active_listening,
+            'expressive_communication': (verbal_communication + non_verbal_communication) / 2,
+            'receptive_communication': (active_listening + empathetic_communication) / 2,
+            'influential_communication': (persuasive_communication + assertive_communication) / 2,
+            'interactive_communication': (collaborative_communication + active_listening) / 2,
             'balanced_communication': (verbal_communication + written_communication) / 2,
             'communication_style_profile': self.classify_communication_style(primary_style, communication_effectiveness_score)
         }
@@ -252,10 +252,7 @@ class CommunicationStyleExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = persuasion
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

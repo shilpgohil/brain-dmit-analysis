@@ -1,261 +1,97 @@
-# 🌟 COMPREHENSIVE DMIT PROJECT DOCUMENTATION
-## Complete Guide to Our Advanced Fingerprint Intelligence Analysis System
+# DMIT Analysis Platform
 
-**Project:** Advanced DMIT (Dermatoglyphics Multiple Intelligence Test) Platform  
-**Version:** 3.0 - Advanced 3D Integration  
-**Last Updated:** July 2025  
-**Status:** ✅ Production Ready  
+**Dermatoglyphics Multiple Intelligence Test — biometric analysis pipeline, REST API, web app, and PDF report engine.**
+
+Version 3.2 ("Scientific-Full") · Python 3.12 + FastAPI backend · Next.js 16 frontend · OpenCV/NumPy computer vision (no ML models in the live path)
 
 ---
 
-## 📋 TABLE OF CONTENTS
+## What it does
 
-1. [Project Overview](#project-overview)
-2. [What is DMIT?](#what-is-dmit)
-3. [System Architecture](#system-architecture)
-4. [Technology Stack](#technology-stack)
-5. [Core Components](#core-components)
-6. [Pipeline Process](#pipeline-process)
-7. [Features & Capabilities](#features--capabilities)
-8. [Data Flow](#data-flow)
-9. [File Structure](#file-structure)
-10. [Installation & Setup](#installation--setup)
-11. [Usage Examples](#usage-examples)
-12. [API Documentation](#api-documentation)
-13. [Testing & Quality Assurance](#testing--quality-assurance)
-14. [Performance Metrics](#performance-metrics)
-15. [Security & Privacy](#security--privacy)
-16. [Deployment](#deployment)
-17. [Maintenance & Updates](#maintenance--updates)
-18. [Troubleshooting](#troubleshooting)
-19. [Future Roadmap](#future-roadmap)
-20. [Contact & Support](#contact--support)
+Upload up to 10 fingerprint images (one per finger, slots `L1`–`L5` / `R1`–`R5`). The platform:
 
----
+1. **Preprocesses** raw finger photos into fingerprint-like images (segmentation → validation → fingertip ROI → nail removal → CLAHE + Gabor ridge enhancement) — optional, on by default.
+2. **Extracts ~85 biometric features** per finger (statistics, minutiae, fractal, topological, graph, ridge, spectral, pattern analytics) with quality-tiered processing, plus CADA pattern classification (arch/loop/whorl/accidental, 23 subtypes) via Poincaré singular-point detection and core→delta TFRC ridge counting.
+3. **Maps features to a DMIT profile** using research-paper-backed "Table 1.1" finger→brain-lobe correlations: thumb→prefrontal (personality), index→posterior frontal (logic), middle→parietal (kinesthetic), ring→temporal (linguistic/musical), little→occipital (visual). Produces 9 Gardner multiple intelligences, 5 brain lobes + hemisphere biases, VAK learning styles, and Big Five personality — aggregated across fingers by weighted slots, not naive averaging.
+4. **Runs 41 extension analyzers** (emotional intelligence, career guidance, leadership, memory, neurodivergence, …) over the combined feature/profile vector.
+5. **Serves results** as JSON through a FastAPI backend with live pipeline-stage progress, rendered by a cinematic dark-themed Next.js app (radar/bar/pie charts, per-finger drill-down, session archive, comparison).
+6. **Generates a premium PDF report** — 19 sections, ivory/gold design, matplotlib charts, real-data-only policy (missing data renders as N/A or is omitted; never fabricated).
 
-## 🎯 PROJECT OVERVIEW
+**Scientific honesty:** palm-only metrics (ATD angle) and pseudoscientific features (quantum consciousness, brain criticality) return `None` by design and are excluded from scoring. The interpretation layer follows DMIT theory; it is not presented as validated clinical science. See `system_architecture.md` and `docs/ERROR_HANDLING.md` §5.
 
-### What We Built
-We have developed a **revolutionary biometric intelligence analysis system** that analyzes fingerprint patterns to provide comprehensive insights into:
+## Quick start
 
-- **Multiple Intelligences** (9 types)
-- **Brain Hemisphere Dominance** (6 areas)
-- **Learning Styles** (3 types)
-- **Personality Traits** (5 dimensions)
-- **Career Guidance** (AI-powered recommendations)
-- **Wellness Indicators** (Health insights)
-- **Advanced Cognitive Metrics** (18 quantum-inspired features)
+```powershell
+# 1. Python env (from repo root)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 
-### Key Achievements
-- ✅ **85 Real Features** extracted per fingerprint image
-- ✅ **61+ Intelligence Extensions** covering all aspects of human cognition
-- ✅ **2.5 Second Processing** for complete 10-finger analysis
-- ✅ **100% Real Data** - no mock values or defaults
-- ✅ **Advanced 3D PDF Reports** with stunning visualizations
-- ✅ **Enterprise-Grade** reliability and scalability
+# 2. Frontend
+cd frontend
+npm install
+"NEXT_PUBLIC_API_URL=http://localhost:8001/api" | Out-File -Encoding ascii .env.local   # API runs on 8001
+cd ..
 
-### Business Value
-- **HR & Recruitment:** Identify perfect job candidates
-- **Education:** Personalized learning paths
-- **Career Counseling:** Data-driven career guidance
-- **Personal Development:** Self-awareness and growth
-- **Healthcare:** Early cognitive health indicators
-
----
-
-## 🧠 WHAT IS DMIT?
-
-### Definition
-**DMIT (Dermatoglyphics Multiple Intelligence Test)** is a scientific method that analyzes fingerprint patterns to understand an individual's innate intelligence types, learning preferences, and cognitive strengths.
-
-### Scientific Basis
-- **Dermatoglyphics:** Study of fingerprint patterns
-- **Multiple Intelligence Theory:** Howard Gardner's 9 intelligence types
-- **Brain Mapping:** Correlation between fingerprint patterns and brain development
-- **Research-Backed:** Based on 100+ scientific studies and clinical research
-
-### What It Analyzes
-1. **Ridge Patterns:** Whorls, loops, arches
-2. **Minutiae Points:** Bifurcations, endings, islands
-3. **Pattern Density:** Ridge frequency and distribution
-4. **Symmetry Analysis:** Left-right pattern comparison
-5. **Fractal Complexity:** Mathematical pattern analysis
-6. **Quantum Metrics:** Advanced cognitive indicators
-
----
-
-## 🏗️ SYSTEM ARCHITECTURE
-
-### High-Level Architecture
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Fingerprint   │───▶│  Feature         │───▶│  DMIT           │
-│   Images        │    │  Extractor       │    │  Mapper         │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                                       │
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   3D PDF        │◀───│  Extensions      │◀───│  Intelligence   │
-│   Generator     │    │  Engine          │    │  Analysis       │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+# 3. Run (two terminals, both from repo root)
+.\start_api.ps1        # → http://localhost:8001/api/docs
+.\start_frontend.ps1   # → http://localhost:3000
 ```
 
-### Component Architecture
+Then open `http://localhost:3000/analysis/new`, assign prints to the 10-slot hand grid, and run. Sample scanner prints live in `finger_prints/` (`L1Center.bmp` … `R5Center.bmp`).
+
+End-to-end smoke test (API must be running): `python scripts/test_api_premium_report.py`.
+
+## Repository layout
+
+| Path | Purpose |
+|---|---|
+| `api/` | FastAPI backend: sessions, uploads, analysis runner, SQLite persistence |
+| `frontend/` | Next.js 16 app (App Router, Tailwind v4, Recharts) |
+| `integrated_dmit_pipeline.py` | Pipeline orchestrator + Table 1.1 aggregation |
+| `optimized_feature_extractor_clean.py` | 85-feature CV extractor (quality tiers) |
+| `pattern_classifier.py` | Singular points, pattern families/subtypes, TFRC |
+| `dmit_intelligence_mapper.py` | Features → MI / lobes / VAK / Big Five |
+| `preprocessing_images/` | 5-stage finger-photo → fingerprint pipeline |
+| `dmit_extensions/` | Extension engine + 41 registered analyzers |
+| `premium_pdf_report/` | API report engine (19-section premium PDF) |
+| `advanced_3d_pdf_generator/` | CLI report engine (legacy/alternate PDF) |
+| `data/` · `uploads/` · `output/` | Runtime state: SQLite DB, images, PDFs |
+| `docs/` | **Full documentation suite** + product roadmap |
+
+## API at a glance
+
+```text
+GET  /api/health                                 component status, queue depth
+POST /api/sessions                               create session
+POST /api/sessions/{id}/images                   upload prints (finger_positions=L1..R5)
+POST /api/analysis/run                           start pipeline (background)
+GET  /api/analysis/{id}                          poll status / fetch full result
+GET  /api/analysis/{id}/report/download          premium PDF
+GET  /api/sessions · DELETE /api/sessions/{id}   archive management
 ```
-📁 DMIT Platform
-├── 🔍 Feature Extraction Layer
-│   ├── Image Preprocessing
-│   ├── Ridge Analysis
-│   ├── Minutiae Detection
-│   └── Pattern Recognition
-├── 🧠 Intelligence Mapping Layer
-│   ├── Multiple Intelligences (9 types)
-│   ├── Brain Hemisphere Mapping
-│   ├── Learning Styles
-│   └── Personality Traits
-├── 🔧 Extensions Engine
-│   ├── 61+ Intelligence Extensions
-│   ├── Career Guidance
-│   ├── Wellness Analysis
-│   └── Advanced Metrics
-├── 📊 Report Generation
-│   ├── 3D PDF Generator
-│   ├── Interactive Charts
-│   └── Professional Reports
-└── 🌐 Web Interface
-    ├── Next.js Frontend
-    ├── FastAPI Backend
-    └── Real-time Processing
-```
 
----
+Interactive docs: `http://localhost:8001/api/docs`. Full contract: [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md).
 
-## 🛠️ TECHNOLOGY STACK
+## Documentation
 
-### Backend Technologies
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Python** | 3.10+ | Core analytics and processing |
-| **OpenCV** | 4.8+ | Image processing and computer vision |
-| **NumPy** | 1.24+ | Numerical computations |
-| **SciPy** | 1.11+ | Scientific computing |
-| **scikit-image** | 0.21+ | Advanced image analysis |
-| **PyTorch** | 2.0+ | Deep learning models |
-| **Transformers** | 4.30+ | Vision Transformer models |
-| **NetworkX** | 3.1+ | Graph analysis |
-| **Pandas** | 2.0+ | Data manipulation |
+The complete reverse-engineered documentation suite lives in [`docs/`](docs/README.md):
 
-### Frontend Technologies
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Next.js** | 15.3+ | React framework |
-| **React** | 19.0+ | UI library |
-| **TypeScript** | 5.0+ | Type safety |
-| **Tailwind CSS** | 4.0+ | Styling |
-| **Plotly.js** | 2.25+ | Interactive charts |
-| **Framer Motion** | 12.20+ | Animations |
+- [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layers, boundaries, dependency graph, scientific model
+- [`DATA_FLOW.md`](docs/DATA_FLOW.md) — request lifecycle from upload to PDF
+- [`COMPONENTS.md`](docs/COMPONENTS.md) — file-by-file reference (feature catalog, extension registry, frontend inventory)
+- [`API_REFERENCE.md`](docs/API_REFERENCE.md) — endpoints, schemas, validation, errors
+- [`DIAGRAMS.md`](docs/DIAGRAMS.md) — Mermaid architecture/sequence/state/storage diagrams
+- [`STORAGE_AND_PERSISTENCE.md`](docs/STORAGE_AND_PERSISTENCE.md) · [`ERROR_HANDLING.md`](docs/ERROR_HANDLING.md) · [`CONFIGURATION.md`](docs/CONFIGURATION.md) · [`DEPLOYMENT.md`](docs/DEPLOYMENT.md) · [`CHANGELOG_NOTES.md`](docs/CHANGELOG_NOTES.md)
+- [`PRODUCT_ROADMAP.md`](docs/PRODUCT_ROADMAP.md) — audiences and phased delivery plan
 
-### API & Infrastructure
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **FastAPI** | 0.104+ | REST API |
-| **Uvicorn** | 0.24+ | ASGI server |
-| **Pydantic** | 2.5+ | Data validation |
-| **ReportLab** | 4.0+ | PDF generation |
-| **Plotly** | 5.15+ | Chart generation |
+## Current limitations (honest)
 
-### Development Tools
-| Tool | Purpose |
-|------|---------|
-| **Git** | Version control |
-| **Docker** | Containerization |
-| **pytest** | Testing framework |
-| **ESLint** | Code linting |
-| **Prettier** | Code formatting |
+- No authentication; CORS open to localhost; uploads unvalidated — **dev/demo posture** (hardening is roadmap Phase 2).
+- Background analysis runs in-process (FastAPI background task) — not durable across restarts; single-process deployment only.
+- SQLite single-file session store; generated PDFs are never garbage-collected.
+- Known code gaps are catalogued in [`docs/COMPONENTS.md`](docs/COMPONENTS.md) §12 (e.g. hemisphere key mismatch in the API, unpopulated `singular_points`, 14 unregistered legacy extensions).
 
----
+## License / status
 
-## 🔧 CORE COMPONENTS
-
-### 1. Optimized Feature Extractor
-**File:** `optimized_feature_extractor_clean.py` (97KB, 2176 lines)
-
-**Purpose:** Extracts 85 real features from fingerprint images
-
-**Key Features:**
-- **Quality-Aware Processing:** Automatically detects image quality and adjusts processing
-- **85 Feature Categories:**
-  - Statistical Features (5): mean_intensity, std_intensity, entropy
-  - Ridge Features (6): tfrc, ridge_density, ridge_flow_quality
-  - Fractal Features (4): box_counting_dimension, lacunarity
-  - Topological Features (5): betti_0, betti_1, euler_characteristic
-  - Graph Features (6): graph_density, spectral_radius
-  - Spectral Features (4): fourier_energy_total, wavelet_complexity
-  - Level-3 Skin Features (4): pore_density, incipient_ridge_count
-  - Pattern Analytics (18): whorl_complexity, double_loop_detected
-  - Quantum & Criticality (13): quantum_consciousness_score, neural_avalanches
-  - Cross-spectral Features (4): cross_spectral_fusion_score
-
-**Processing Tiers:**
-- **Basic:** 25 features (low-quality images)
-- **Core:** 50 features (mid-quality images)
-- **Advanced:** 70 features (high-quality images)
-- **Comprehensive:** 85 features (excellent quality images)
-
-### 2. DMIT Intelligence Mapper
-**File:** `dmit_intelligence_mapper.py` (125KB, 2683 lines)
-
-**Purpose:** Maps numeric features to intelligence types and cognitive traits
-
-**Mapping Categories:**
-- **Multiple Intelligences (9):** Linguistic, Logical-Mathematical, Spatial, Musical, Bodily-Kinesthetic, Interpersonal, Intrapersonal, Naturalistic, Existential
-- **Brain Hemispheres (6):** Left/Right Hemisphere, Frontal/Parietal/Temporal/Occipital Lobes
-- **Learning Styles (3):** Visual, Auditory, Kinesthetic
-- **Personality Traits (5):** Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism
-- **Meta/Advanced (18):** Quantum coherence, criticality, fractal intelligence
-
-### 3. DMIT Extensions Engine
-**Directory:** `dmit_extensions/` (61+ extension files)
-
-**Purpose:** Provides specialized analysis for different intelligence domains
-
-**Extension Categories:**
-- **Core Intelligence (9):** Basic intelligence type analysis
-- **Cognitive & Executive (8):** Memory, decision-making, executive function
-- **Career & Professional (12):** Career guidance, leadership, entrepreneurship
-- **Wellness & Health (6):** Health indicators, stress management
-- **Advanced Analytics (15):** Quantum metrics, fractal analysis, pattern recognition
-- **Social & Emotional (11):** Emotional intelligence, interpersonal skills
-
-**Sample Extensions:**
-- `linguistic_intelligence.py` - Language and communication analysis
-- `career_guidance.py` - AI-powered career recommendations
-- `health_wellness.py` - Health and wellness indicators
-- `quantum_consciousness.py` - Advanced cognitive metrics
-
-### 4. Advanced 3D PDF Generator
-**Directory:** `advanced_3d_pdf_generator/`
-
-**Purpose:** Creates professional 3D PDF reports with stunning visualizations
-
-**Features:**
-- **3D Radar Charts:** Interactive intelligence visualization
-- **Brain Mapping:** 3D brain model with activity regions
-- **Career Landscape:** 3D terrain showing career opportunities
-- **Learning Style Cube:** 3D visualization of learning preferences
-- **Professional Templates:** Cover page, executive summary, detailed analysis
-- **Real Data Only:** No mock values or defaults
-
-### 5. Integrated Pipeline
-**File:** `integrated_dmit_pipeline.py` (23KB, 557 lines)
-
-**Purpose:** Orchestrates the complete analysis pipeline
-
-**Pipeline Stages:**
-1. **Image Loading & Validation**
-2. **Feature Extraction** (0.8s)
-3. **DMIT Mapping** (0.4s)
-4. **Extension Execution** (0.9s)
-5. **Result Aggregation** (0.2s)
-6. **PDF Generation** (0.2s)
-
-**Total Processing Time:** ~2.5 seconds for 10 images 
+Internal project; large portions are uncommitted work-in-progress (see `docs/CHANGELOG_NOTES.md`). Conventional commits (`feat:`, `fix:`, `docs:` …) are the house style.

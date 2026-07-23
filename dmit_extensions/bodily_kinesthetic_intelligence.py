@@ -11,7 +11,7 @@ class BodilyKinestheticIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         
         # Pattern analysis features
         pattern_type = features.get('pattern_type', 'loop')
@@ -80,11 +80,11 @@ class BodilyKinestheticIntelligenceExtension(DMITExtensionBase):
         
         # Determine kinesthetic style based on dominant features
         kinesthetic_styles = {
-            'coordinated': physical_coordination + motor_skills,
-            'expressive': physical_expression + body_awareness,
-            'precise': movement_precision + physical_coordination,
-            'athletic': motor_skills + physical_expression,
-            'graceful': body_awareness + movement_precision
+            'coordinated': (physical_coordination + motor_skills) / 2,
+            'expressive': (physical_expression + body_awareness) / 2,
+            'precise': (movement_precision + physical_coordination) / 2,
+            'athletic': (motor_skills + physical_expression) / 2,
+            'graceful': (body_awareness + movement_precision) / 2
         }
         primary_style = max(kinesthetic_styles.items(), key=lambda x: x[1])[0]
 
@@ -97,11 +97,11 @@ class BodilyKinestheticIntelligenceExtension(DMITExtensionBase):
             'physical_expression': physical_expression,
             'movement_precision': movement_precision,
             'physical_learning': physical_learning,
-            'athletic_ability': motor_skills + physical_coordination,
-            'dance_performance': physical_expression + body_awareness,
-            'sports_excellence': motor_skills + movement_precision,
-            'manual_dexterity': movement_precision + physical_coordination,
-            'physical_creativity': physical_expression + body_awareness,
+            'athletic_ability': (motor_skills + physical_coordination) / 2,
+            'dance_performance': (physical_expression + body_awareness) / 2,
+            'sports_excellence': (motor_skills + movement_precision) / 2,
+            'manual_dexterity': (movement_precision + physical_coordination) / 2,
+            'physical_creativity': (physical_expression + body_awareness) / 2,
             'kinesthetic_profile': self.classify_kinesthetic_level(kinesthetic_intelligence_score)
         }
 
@@ -131,10 +131,7 @@ class BodilyKinestheticIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + graph density = motor skills
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Graph density contribution
         density_score = min(1.0, graph_density)

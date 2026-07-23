@@ -1,3 +1,9 @@
+# ⚠️  IMPORTANT: This extension (Wellness Intelligence (duplicate of Health & Wellness)) is NOT a standard DMIT measure.
+# No peer-reviewed DMIT research links fingerprint patterns to Wellness Intelligence (duplicate of Health & Wellness).
+# Results are computed from biometric complexity metrics as a PROXY INDICATOR ONLY.
+# They should be labelled "Indicative" in any report and never used for major decisions.
+# --- DISCLAIMER END ---
+
 from typing import Dict, Any
 from .base import DMITExtensionBase
 
@@ -11,7 +17,7 @@ class WellnessIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +120,12 @@ class WellnessIntelligenceExtension(DMITExtensionBase):
         
         # Determine wellness intelligence style based on dominant features
         wellness_styles = {
-            'physical': physical_wellness + wellness_balance,
-            'mental': mental_wellness + wellness_intelligence,
-            'emotional': emotional_wellness + wellness_adaptability,
-            'social': social_wellness + wellness_balance,
-            'spiritual': spiritual_wellness + wellness_intelligence,
-            'balanced': wellness_balance + wellness_adaptability
+            'physical': (physical_wellness + wellness_balance) / 2,
+            'mental': (mental_wellness + wellness_intelligence) / 2,
+            'emotional': (emotional_wellness + wellness_adaptability) / 2,
+            'social': (social_wellness + wellness_balance) / 2,
+            'spiritual': (spiritual_wellness + wellness_intelligence) / 2,
+            'balanced': (wellness_balance + wellness_adaptability) / 2
         }
         primary_style = max(wellness_styles.items(), key=lambda x: x[1])[0]
         
@@ -134,11 +140,11 @@ class WellnessIntelligenceExtension(DMITExtensionBase):
             'wellness_balance': wellness_balance,
             'wellness_adaptability': wellness_adaptability,
             'wellness_intelligence': wellness_intelligence,
-            'holistic_wellness': physical_wellness + mental_wellness + emotional_wellness,
-            'social_spiritual': social_wellness + spiritual_wellness,
-            'adaptive_wellness': wellness_adaptability + wellness_balance,
-            'intelligent_wellness': wellness_intelligence + mental_wellness,
-            'balanced_wellness': wellness_balance + wellness_adaptability,
+            'holistic_wellness': (physical_wellness + mental_wellness + emotional_wellness) / 3,
+            'social_spiritual': (social_wellness + spiritual_wellness) / 2,
+            'adaptive_wellness': (wellness_adaptability + wellness_balance) / 2,
+            'intelligent_wellness': (wellness_intelligence + mental_wellness) / 2,
+            'balanced_wellness': (wellness_balance + wellness_adaptability) / 2,
             'wellness_profile': self.classify_wellness_level(wellness_intelligence_score)
         }
 
@@ -275,10 +281,7 @@ class WellnessIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = wellness balance
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

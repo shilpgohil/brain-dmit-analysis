@@ -11,7 +11,7 @@ class SpatialIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class SpatialIntelligenceExtension(DMITExtensionBase):
         
         # Determine spatial intelligence style based on dominant features
         spatial_styles = {
-            'visual_perceiver': visual_perception + visual_organization,
-            'spatial_navigator': spatial_orientation + spatial_memory,
-            'mental_rotator': mental_rotation + spatial_reasoning,
-            'pattern_visualizer': pattern_visualization + visual_adaptability,
-            'spatial_thinker': spatial_reasoning + mental_rotation,
+            'visual_perceiver': (visual_perception + visual_organization) / 2,
+            'spatial_navigator': (spatial_orientation + spatial_memory) / 2,
+            'mental_rotator': (mental_rotation + spatial_reasoning) / 2,
+            'pattern_visualizer': (pattern_visualization + visual_adaptability) / 2,
+            'spatial_thinker': (spatial_reasoning + mental_rotation) / 2,
             'balanced_spatial': (visual_perception + spatial_orientation) / 2
         }
         primary_style = max(spatial_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class SpatialIntelligenceExtension(DMITExtensionBase):
             'visual_organization': visual_organization,
             'spatial_reasoning': spatial_reasoning,
             'visual_adaptability': visual_adaptability,
-            'visual_capacity': visual_perception + visual_organization,
-            'spatial_capacity': spatial_orientation + spatial_memory,
-            'mental_visualization': mental_rotation + pattern_visualization,
-            'spatial_adaptability': visual_adaptability + spatial_reasoning,
-            'spatial_perception': visual_perception + spatial_orientation,
+            'visual_capacity': (visual_perception + visual_organization) / 2,
+            'spatial_capacity': (spatial_orientation + spatial_memory) / 2,
+            'mental_visualization': (mental_rotation + pattern_visualization) / 2,
+            'spatial_adaptability': (visual_adaptability + spatial_reasoning) / 2,
+            'spatial_perception': (visual_perception + spatial_orientation) / 2,
             'spatial_intelligence_profile': self.classify_spatial_intelligence_level(spatial_intelligence_score)
         }
 
@@ -250,10 +250,7 @@ class SpatialIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = spatial memory
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

@@ -18,7 +18,7 @@ Author: DMIT Research Team
 Version: 1.0
 """
 
-import cv2
+import cv2  # type: ignore
 import numpy as np
 from typing import Tuple, Dict, Any
 import logging
@@ -157,7 +157,7 @@ class ShapeValidator:
             return is_valid, confidence, metadata
             
         except Exception as e:
-            logger.error(f"Validation failed: {e}")
+            logger.exception(f"Validation failed: {e}")
             metadata['error'] = str(e)
             return False, 0.0, metadata
     
@@ -175,6 +175,9 @@ class ShapeValidator:
         temp = binary.copy()
         kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
         
+        iterations = 0
+        max_iterations = 1000
+        
         while True:
             eroded = cv2.erode(temp, kernel)
             dilated = cv2.dilate(eroded, kernel)
@@ -182,7 +185,8 @@ class ShapeValidator:
             skeleton = cv2.bitwise_or(skeleton, subset)
             temp = eroded.copy()
             
-            if cv2.countNonZero(temp) == 0:
+            iterations += 1
+            if cv2.countNonZero(temp) == 0 or iterations >= max_iterations:
                 break
         
         return skeleton

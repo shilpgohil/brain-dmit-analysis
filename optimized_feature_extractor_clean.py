@@ -20,7 +20,7 @@ Author: Advanced DMIT Analysis System
 Version: 2.0 (Enhanced Clean - Scientific Derivations)
 """
 
-import cv2
+import cv2  # type: ignore
 import numpy as np
 import time
 import logging
@@ -41,6 +41,14 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _f(value):
+    return float(value) if value is not None else None
+
+
+def _i(value):
+    return int(value) if value is not None else None
+
 class OptimizedFeatureExtractor:
     """
     🎯 Enhanced Optimized Feature Extractor with Algorithmic Derivations
@@ -51,10 +59,14 @@ class OptimizedFeatureExtractor:
     """
     
     def __init__(self):
-        self.core_features = self._define_core_features()
-        self.core_features = self._define_core_features()
+        self.core_features = self._define_core_features()  # FIX: removed duplicate call
         self.quality_thresholds = self._define_quality_thresholds()
-        
+
+        # Cached full classification (cores/deltas/subtype) for the image currently
+        # being processed. Set by _extract_pattern_classification and consumed by the
+        # pattern-aware advanced detectors (double loop, peacock's eye, whorl layering).
+        self._last_classification = None
+
         # Initialize pattern classifier
         if PATTERN_CLASSIFIER_AVAILABLE:
             self.pattern_classifier = PatternClassifier()
@@ -127,9 +139,8 @@ class OptimizedFeatureExtractor:
                 'cross_spectral_fusion_score', 'multi_modal_integration',
                 'spectral_coherence', 'fusion_confidence'
             ],
-            # NEW: Pattern classification features (CADA standard)
             'pattern_classification': [
-                'pattern_family',      # 0=arch, 1=loop, 2=whorl, 3=accidental
+                'pattern_family',      # Pattern family (arch, loop, whorl, accidental)
                 'pattern_subtype_code',  # Numeric code for subtype
                 'triradii_count',      # Number of delta/triradii points (0-2)
                 'core_count',          # Number of core points (0-2)
@@ -162,7 +173,11 @@ class OptimizedFeatureExtractor:
         ALL CALCULATIONS ARE ALGORITHMICALLY DERIVED FROM THE IMAGE
         """
         start_time = time.time()
-        
+
+        # Reset per-image classification cache so a failed classification on this
+        # image can never reuse singular points from a previous image.
+        self._last_classification = None
+
         # Process the input image (assumed to be already a fingerprint image)
         processed_image = image
         logger.info("🔬 Using scanned fingerprint image for real feature extraction")
@@ -206,6 +221,7 @@ class OptimizedFeatureExtractor:
                 'accuracy_maintained': 0.96
             },
             'consolidated_features': consolidated_features,
+            'pattern_classification': self._classification_detail(),
             'intelligence_scores': intelligence_scores,
             'quality_metrics': {
                 'image_quality': image_quality,
@@ -262,8 +278,7 @@ class OptimizedFeatureExtractor:
             return float(quality_score)
             
         except Exception as e:
-            logger.warning(f"Quality assessment failed: {e}")
-            return 0.5  # Default medium quality
+            raise ValueError(f"Image quality could not be assessed: {e}") from e
     
     def _determine_quality_level(self, quality_score: float) -> str:
         """
@@ -347,6 +362,7 @@ class OptimizedFeatureExtractor:
         
         if self.pattern_classifier is None:
             # Return defaults if classifier not available
+            self._last_classification = None
             return {
                 'pattern_family': -1.0,
                 'pattern_subtype_code': -1.0,
@@ -358,7 +374,8 @@ class OptimizedFeatureExtractor:
         
         try:
             result = self.pattern_classifier.classify(image)
-            
+            self._last_classification = result
+
             return {
                 'pattern_family': float(family_encoding.get(result['family'], -1)),
                 'pattern_subtype_code': float(subtype_encoding.get(result['subtype'], -1)),
@@ -368,7 +385,8 @@ class OptimizedFeatureExtractor:
                 'ridge_count': float(result.get('ridge_count', 0))
             }
         except Exception as e:
-            logger.error(f"Pattern classification failed: {e}")
+            logger.exception(f"Pattern classification failed: {e}")
+            self._last_classification = None
             return {
                 'pattern_family': -1.0,
                 'pattern_subtype_code': -1.0,
@@ -377,6 +395,39 @@ class OptimizedFeatureExtractor:
                 'pattern_confidence': 0.0,
                 'ridge_count': 0.0
             }
+
+    def _classification_detail(self) -> Optional[Dict[str, Any]]:
+        """
+        JSON-safe snapshot of the last full pattern classification, including
+        singular point coordinates. Used by the pipeline/API so core/delta
+        positions can be surfaced per finger (AnalysisResult.singular_points).
+        """
+        cls = self._last_classification
+        if not cls:
+            return None
+
+        def _points(items):
+            pts = []
+            for p in items or []:
+                try:
+                    pts.append({'x': int(p['x']), 'y': int(p['y'])})
+                except (KeyError, TypeError, ValueError):
+                    continue
+            return pts
+
+        sp = cls.get('singular_points', {}) or {}
+        return {
+            'family': str(cls.get('family', 'unknown')),
+            'subtype': str(cls.get('subtype', '?')),
+            'subtype_name': str(cls.get('subtype_name', 'Unknown')),
+            'confidence': float(cls.get('confidence', 0.0)),
+            'core_count': int(cls.get('core_count', 0)),
+            'triradii_count': int(cls.get('triradii_count', 0)),
+            'singular_points': {
+                'cores': _points(sp.get('cores')),
+                'deltas': _points(sp.get('deltas')),
+            },
+        }
     
     def _calculate_orientation_entropy(self, image: np.ndarray) -> float:
         """
@@ -415,7 +466,7 @@ class OptimizedFeatureExtractor:
             return float(-np.sum(hist * np.log2(hist)))
         except Exception as e:
             logger.warning(f"Orientation entropy calculation failed: {e}")
-            return 0.5
+            return None
 
     def _extract_basic_features(self, image: np.ndarray, image_quality: float = 0.5, topology_data: Dict = None) -> Dict[str, float]:
         """
@@ -431,53 +482,53 @@ class OptimizedFeatureExtractor:
         features['entropy'] = self._calculate_orientation_entropy(image)
         
         # Minutiae features - PROPER DETECTION using crossing number
-        minutiae_count, minutiae_details = self._detect_minutiae(image)
+        minutiae_count, _ = self._detect_minutiae(image)
         features['minutiae_count'] = float(minutiae_count)
         features['minutiae_density'] = float(minutiae_count / (image.shape[0] * image.shape[1] / 10000))
         
         # Fractal features - ALGORITHMIC DERIVATION
-        features['box_counting_dimension'] = float(self._calculate_box_counting_dimension(image))
-        features['lacunarity'] = float(self._calculate_lacunarity(image))
+        features['box_counting_dimension'] = _f(self._calculate_box_counting_dimension(image))
+        features['lacunarity'] = _f(self._calculate_lacunarity(image))
         
         # Topological features - ALGORITHMIC DERIVATION
         # Use pre-computed topology if available for consistency
         if topology_data:
-            betti_0 = int(topology_data['betti_0'])
-            betti_1 = int(topology_data['betti_1'])
+            betti_0 = _i(topology_data.get('betti_0'))
+            betti_1 = _i(topology_data.get('betti_1'))
         else:
-            betti_0 = int(self._calculate_betti_0(image))
-            betti_1 = int(self._calculate_betti_1(image))
+            betti_0 = _i(self._calculate_betti_0(image))
+            betti_1 = _i(self._calculate_betti_1(image))
             
         features['betti_0'] = betti_0
         features['betti_1'] = betti_1
         
         # Euler Characteristic - Only compute if quality is sufficient
-        if image_quality > 0.4:  # Threshold for topological stability
-             features['euler_characteristic'] = float(betti_0 - betti_1)
+        if image_quality > 0.4 and betti_0 is not None and betti_1 is not None:
+            features['euler_characteristic'] = float(betti_0 - betti_1)
         else:
-             features['euler_characteristic'] = 0.0
+            features['euler_characteristic'] = None
         
         # Graph features - ALGORITHMIC DERIVATION
-        features['graph_density'] = float(self._calculate_graph_density(image))
-        features['average_clustering'] = float(self._calculate_average_clustering(image))
+        features['graph_density'] = _f(self._calculate_graph_density(image))
+        features['average_clustering'] = _f(self._calculate_average_clustering(image))
         
-        # Ridge features - ALGORITHMIC DERIVATION
-        features['tfrc'] = float(self._calculate_tfrc(image))
-        features['ridge_density'] = float(self._calculate_ridge_density(image))
+        # Ridge features — CORRECT TFRC using core-to-delta ridge counting from PatternClassifier
+        features['tfrc'] = _f(self._calculate_tfrc(image))
+        features['ridge_density'] = _f(self._calculate_ridge_density(image))
         
         # Level 3 features - ALGORITHMIC DERIVATION
-        features['pore_density'] = float(self._calculate_pore_density(image))
-        features['incipient_ridge_count'] = float(self._calculate_incipient_ridge_count(image))
+        features['pore_density'] = _f(self._calculate_pore_density(image))
+        features['incipient_ridge_count'] = _f(self._calculate_incipient_ridge_count(image))
         
         # Spectral features - ALGORITHMIC DERIVATION
         fft = np.fft.fft2(image)
         features['fourier_energy_total'] = float(np.sum(np.abs(fft)**2))
-        features['fourier_harmonic_ratio'] = float(self._calculate_fourier_harmonic_ratio(image))
+        features['fourier_harmonic_ratio'] = _f(self._calculate_fourier_harmonic_ratio(image))
         
         # Meta features - ALGORITHMIC DERIVATION
-        features['overall_quality_score'] = float(self._assess_image_quality(image))
-        features['extraction_confidence'] = float(self._calculate_extraction_confidence(image))
-        features['feature_stability'] = float(self._calculate_feature_stability(image))
+        features['overall_quality_score'] = _f(self._assess_image_quality(image))
+        features['extraction_confidence'] = _f(self._calculate_extraction_confidence(image))
+        features['feature_stability'] = _f(self._calculate_feature_stability(image))
         
         return features
     
@@ -512,16 +563,23 @@ class OptimizedFeatureExtractor:
             # Normalize and threshold
             harris_norm = cv2.normalize(harris, None, 0, 255, cv2.NORM_MINMAX)
             
-            # Threshold - only strong corners (adaptive based on image)
-            threshold = np.percentile(harris_norm[harris_norm > 0], 95) if np.any(harris_norm > 0) else 10
+            # Threshold - only strong corners (adaptive based on image).
+            # FIX: the 95th percentile passed thousands of weak texture corners on
+            # any decent scan, so the downstream cap was always hit and
+            # minutiae_count was pinned to a constant for every subject (zero
+            # discriminative value). The 99th percentile keeps only genuinely
+            # strong ridge events (endings/bifurcations), letting the count
+            # reflect the actual print.
+            threshold = np.percentile(harris_norm[harris_norm > 0], 99) if np.any(harris_norm > 0) else 10
             
             # Find corner locations
-            corner_locs = np.where(harris_norm > threshold)
+            corner_locs = np.nonzero(harris_norm > threshold)
             
             # Step 3: Non-maximum suppression to avoid clusters
-            # Use a grid-based approach for efficiency
+            # Grid cell ≈ one ridge period (~9-12 px at 500 dpi): two minutiae
+            # closer than a ridge wavelength are duplicates of the same event.
             h, w = gray.shape
-            grid_size = 10  # Minimum separation between minutiae
+            grid_size = 12  # Minimum separation between minutiae
             corner_grid = {}
             
             for y, x in zip(corner_locs[0], corner_locs[1]):
@@ -537,8 +595,12 @@ class OptimizedFeatureExtractor:
             
             minutiae_points = [{'x': v[0], 'y': v[1], 'strength': v[2]} for v in corner_grid.values()]
             
-            # Step 4: Limit to reasonable count based on image size (cap at 80 for 240x320 image)
-            max_minutiae = max(30, min(80, (h * w) // 1000))
+            # Step 4: Area-proportional sanity ceiling only (no fixed cap). The
+            # old fixed ceiling (80, then 150) was hit by every quality scan and
+            # pinned minutiae_count to a constant — zero information downstream.
+            # Scaling purely with ridge area lets the genuine count vary while
+            # still bounding pathological noise.
+            max_minutiae = max(40, (h * w) // 400)
             if len(minutiae_points) > max_minutiae:
                 # Sort by strength and take top
                 minutiae_points = sorted(minutiae_points, key=lambda x: x['strength'], reverse=True)[:max_minutiae]
@@ -553,7 +615,7 @@ class OptimizedFeatureExtractor:
             
         except Exception as e:
             logger.warning(f"Minutiae detection failed: {e}")
-            return 0, {'points': [], 'ending_count': 0, 'bifurcation_count': 0}
+            return None, {'points': [], 'ending_count': 0, 'bifurcation_count': 0}
     
     def _skeletonize(self, binary: np.ndarray) -> np.ndarray:
         """
@@ -613,12 +675,12 @@ class OptimizedFeatureExtractor:
         features = {}
         
         # Additional fractal features - ALGORITHMIC DERIVATION
-        features['correlation_dimension'] = float(self._calculate_correlation_dimension(image))
-        features['scale_consistency'] = float(self._calculate_scale_consistency(image))
+        features['correlation_dimension'] = _f(self._calculate_correlation_dimension(image))
+        features['scale_consistency'] = _f(self._calculate_scale_consistency(image))
         
         # Additional topological features - ALGORITHMIC DERIVATION
         # Additional topological features - ALGORITHMIC DERIVATION
-        features['persistence_entropy'] = float(self._calculate_persistence_entropy(image))
+        features['persistence_entropy'] = _f(self._calculate_persistence_entropy(image))
         
         # Use centralized topology for complexity if available
         if topology_data:
@@ -627,27 +689,27 @@ class OptimizedFeatureExtractor:
             b1 = topology_data['betti_1']
             features['topological_complexity'] = float(min(1.0, (b0 + b1) / 200.0))
         else:
-            features['topological_complexity'] = float(self._calculate_topological_complexity(image))
+            features['topological_complexity'] = _f(self._calculate_topological_complexity(image))
         
         # Additional graph features - ALGORITHMIC DERIVATION
-        features['betweenness_centrality_mean'] = float(self._calculate_betweenness_centrality(image))
-        features['closeness_centrality_mean'] = float(self._calculate_closeness_centrality(image))
-        features['modularity'] = float(self._calculate_modularity(image))
-        features['spectral_radius'] = float(self._calculate_spectral_radius(image))
+        features['betweenness_centrality_mean'] = _f(self._calculate_betweenness_centrality(image))
+        features['closeness_centrality_mean'] = _f(self._calculate_closeness_centrality(image))
+        features['modularity'] = _f(self._calculate_modularity(image))
+        features['spectral_radius'] = _f(self._calculate_spectral_radius(image))
         
         # Additional ridge features - ALGORITHMIC DERIVATION
-        features['ridge_flow_quality'] = float(self._calculate_ridge_flow_quality(image))
-        features['dominant_direction'] = float(self._calculate_dominant_direction(image))
-        features['symmetry_index'] = float(self._calculate_symmetry_index(image))
-        features['frequency_stability'] = float(self._calculate_frequency_stability(image))
+        features['ridge_flow_quality'] = _f(self._calculate_ridge_flow_quality(image))
+        features['dominant_direction'] = _f(self._calculate_dominant_direction(image))
+        features['symmetry_index'] = _f(self._calculate_symmetry_index(image))
+        features['frequency_stability'] = _f(self._calculate_frequency_stability(image))
         
         # Additional level 3 features - ALGORITHMIC DERIVATION
-        features['micro_texture_entropy'] = float(self._calculate_micro_texture_entropy(image))
-        features['contour_complexity'] = float(self._calculate_contour_complexity(image))
+        features['micro_texture_entropy'] = _f(self._calculate_micro_texture_entropy(image))
+        features['contour_complexity'] = _f(self._calculate_contour_complexity(image))
         
         # Additional spectral features - ALGORITHMIC DERIVATION
-        features['wavelet_complexity'] = float(self._calculate_wavelet_complexity(image))
-        features['power_concentration'] = float(self._calculate_power_concentration(image))
+        features['wavelet_complexity'] = _f(self._calculate_wavelet_complexity(image))
+        features['power_concentration'] = _f(self._calculate_power_concentration(image))
         
         # Quantum consciousness features - ALGORITHMIC DERIVATION
         quantum_features = self._extract_quantum_consciousness_features(image)
@@ -682,43 +744,43 @@ class OptimizedFeatureExtractor:
         features = {}
         
         # Comprehensive statistical features - ALGORITHMIC DERIVATION
-        features['skewness'] = float(self._calculate_skewness(image))
-        features['kurtosis'] = float(self._calculate_kurtosis(image))
+        features['skewness'] = _f(self._calculate_skewness(image))
+        features['kurtosis'] = _f(self._calculate_kurtosis(image))
         
         # Comprehensive fractal features - ALGORITHMIC DERIVATION
-        features['information_dimension'] = float(self._calculate_information_dimension(image))
-        features['differential_box_counting'] = float(self._calculate_differential_box_counting(image))
+        features['information_dimension'] = _f(self._calculate_information_dimension(image))
+        features['differential_box_counting'] = _f(self._calculate_differential_box_counting(image))
         
         # Comprehensive topological features - ALGORITHMIC DERIVATION
-        features['bottleneck_distance'] = float(self._calculate_bottleneck_distance(image))
-        features['wasserstein_distance'] = float(self._calculate_wasserstein_distance(image))
+        features['bottleneck_distance'] = _f(self._calculate_bottleneck_distance(image))
+        features['wasserstein_distance'] = _f(self._calculate_wasserstein_distance(image))
         
         # Comprehensive graph features - ALGORITHMIC DERIVATION
-        features['eigenvector_centrality'] = float(self._calculate_eigenvector_centrality(image))
-        features['pagerank_score'] = float(self._calculate_pagerank_score(image))
+        features['eigenvector_centrality'] = _f(self._calculate_eigenvector_centrality(image))
+        features['pagerank_score'] = _f(self._calculate_pagerank_score(image))
         
         # Comprehensive ridge features - ALGORITHMIC DERIVATION
-        features['ridge_thickness'] = float(self._calculate_ridge_thickness(image))
-        features['valley_thickness'] = float(self._calculate_valley_thickness(image))
+        features['ridge_thickness'] = _f(self._calculate_ridge_thickness(image))
+        features['valley_thickness'] = _f(self._calculate_valley_thickness(image))
         
         # Comprehensive level 3 features - ALGORITHMIC DERIVATION
-        features['edge_density'] = float(self._calculate_edge_density(image))
-        features['contour_count'] = float(self._calculate_contour_count(image))
+        features['edge_density'] = _f(self._calculate_edge_density(image))
+        features['contour_count'] = _f(self._calculate_contour_count(image))
         
         # Comprehensive spectral features - ALGORITHMIC DERIVATION
-        features['spectral_rolloff'] = float(self._calculate_spectral_rolloff(image))
-        features['spectral_flatness'] = float(self._calculate_spectral_flatness(image))
+        features['spectral_rolloff'] = _f(self._calculate_spectral_rolloff(image))
+        features['spectral_flatness'] = _f(self._calculate_spectral_flatness(image))
         
         # Enhanced quantum features - ALGORITHMIC DERIVATION
-        features['quantum_coherence'] = float(self._calculate_quantum_coherence(image))
+        features['quantum_coherence'] = _f(self._calculate_quantum_coherence(image))
         
         # Enhanced brain criticality features - ALGORITHMIC DERIVATION
-        features['neural_complexity'] = float(self._calculate_neural_complexity(image))
-        features['information_integration'] = float(self._calculate_information_integration(image))
+        features['neural_complexity'] = _f(self._calculate_neural_complexity(image))
+        features['information_integration'] = _f(self._calculate_information_integration(image))
         
         # Enhanced cross-spectral features - ALGORITHMIC DERIVATION
-        features['spectral_entropy'] = float(self._calculate_spectral_entropy(image))
-        features['frequency_modulation'] = float(self._calculate_frequency_modulation(image))
+        features['spectral_entropy'] = _f(self._calculate_spectral_entropy(image))
+        features['frequency_modulation'] = _f(self._calculate_frequency_modulation(image))
         
         return features
     
@@ -766,15 +828,34 @@ class OptimizedFeatureExtractor:
         return features
     
     def _analyze_whorl_complexity(self, image: np.ndarray) -> Dict[str, float]:
-        # Analyze whorl complexity for logical layering and multi-threaded thinking - ALGORITHMIC DERIVATION
+        """
+        Analyze whorl complexity (logical layering / multi-threaded thinking).
+
+        CADA rule: layering/spiral complexity is a property of the WHORL family
+        (1+ cores, 2 triradii). Computing "whorl layering" texture statistics on
+        an arch or loop produces meaningless mid-range values, so the texture
+        analysis is gated on the actual classified pattern family.
+        """
+        zero = {
+            'whorl_logical_layering_score': 0.0,
+            'whorl_concentric_pattern_score': 0.0,
+            'whorl_spiral_complexity': 0.0,
+            'whorl_multi_threaded_thinking': 0.0
+        }
         try:
+            cls = self._last_classification or {}
+            family = str(cls.get('family', 'unknown'))
+            # Only whorls (and whorl-bearing accidentals) carry layering signal.
+            if family not in ('whorl', 'accidental'):
+                return zero
+
             # Calculate concentric pattern complexity
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
-            
+
             # Use distance transform to find concentric patterns
             _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             dist_transform = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
-            
+
             # Analyze concentric circles
             max_dist = np.max(dist_transform)
             if max_dist > 0:
@@ -783,10 +864,13 @@ class OptimizedFeatureExtractor:
                 logical_layering = min(1.0, concentric_score * 2.0)
                 spiral_complexity = min(1.0, np.var(dist_transform) / 1000.0)
             else:
-                logical_layering = 0.3
-                spiral_complexity = 0.5
-                concentric_score = 0.1
-            
+                return zero
+
+            # Weight by classification confidence so a low-confidence "whorl"
+            # cannot produce a saturated layering score.
+            confidence = float(cls.get('confidence', 0.5))
+            logical_layering *= max(0.5, confidence)
+
             return {
                 'whorl_logical_layering_score': float(logical_layering),
                 'whorl_concentric_pattern_score': float(concentric_score),
@@ -795,81 +879,130 @@ class OptimizedFeatureExtractor:
             }
         except Exception as e:
             logger.warning(f"Whorl complexity analysis failed: {e}")
-            return {
-                'whorl_logical_layering_score': 0.5,
-                'whorl_concentric_pattern_score': 0.3,
-                'whorl_spiral_complexity': 0.4,
-                'whorl_multi_threaded_thinking': 0.0
-            }
+            # Real-data policy: on failure report absence (0.0), never fabricated mid-range values.
+            return zero
     
+    def _extract_loop_areas(self, contours) -> Tuple[int, List[float]]:
+        loop_count = 0
+        loop_areas = []
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area > 100:
+                perimeter = cv2.arcLength(contour, True)
+                if perimeter > 0:
+                    circularity = 4 * np.pi * area / (perimeter * perimeter)
+                    if circularity > 0.3:
+                        loop_count += 1
+                        loop_areas.append(area)
+        return loop_count, loop_areas
+
     def _detect_double_loops(self, image: np.ndarray) -> Dict[str, float]:
-        # Detect double loops for balanced creative & structured thinking - ALGORITHMIC DERIVATION
+        """
+        Detect double-loop (twin-core) patterns.
+
+        CADA definition: a double loop / whorl composite (codes Wc, Wd, Wi) is a
+        TWIN-CORE pattern — two cores embracing each other, with two triradii.
+        The previous implementation counted "circular-ish" Canny contours and
+        fired on virtually any fingerprint (every ridge field contains many
+        closed contours). Detection is now gated on the singular-point evidence
+        from the Poincaré classifier: >= 2 cores AND >= 2 deltas. The contour
+        statistics are kept only to quantify the symmetry of a detected pair.
+        """
+        zero = {
+            'double_loop_detected': 0.0,
+            'double_loop_count': 0.0,
+            'double_loop_symmetry': 0.0,
+            'double_loop_balanced_thinking': 0.0,
+            'double_loop_creative_structured_balance': 0.0
+        }
         try:
+            cls = self._last_classification or {}
+            core_count = int(cls.get('core_count', 0))
+            delta_count = int(cls.get('triradii_count', 0))
+            subtype = str(cls.get('subtype', '?'))
+
+            # Twin-core evidence: explicit composite/double/imploding subtype,
+            # or raw singular-point counts consistent with a double loop.
+            is_double_loop = subtype in ('Wc', 'Wd', 'Wi') or (core_count >= 2 and delta_count >= 2)
+            if not is_double_loop:
+                return zero
+
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
-            
-            # Use contour detection to find loops
+
+            # Contour analysis quantifies how balanced the two embracing loops are.
             edges = cv2.Canny(gray, 50, 150)
             contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            # Count potential loops
-            loop_count = 0
-            loop_areas = []
-            
-            for contour in contours:
-                area = cv2.contourArea(contour)
-                if area > 100:  # Filter small contours
-                    # Check if contour is roughly circular (loop-like)
-                    perimeter = cv2.arcLength(contour, True)
-                    if perimeter > 0:
-                        circularity = 4 * np.pi * area / (perimeter * perimeter)
-                        if circularity > 0.3:  # Threshold for loop-like shapes
-                            loop_count += 1
-                            loop_areas.append(area)
-            
-            # Calculate double loop characteristics
-            is_double_loop = loop_count >= 2
+            _, loop_areas = self._extract_loop_areas(contours)
+
             loop_symmetry = np.std(loop_areas) / (np.mean(loop_areas) + 1e-10) if loop_areas else 0.5
-            balanced_thinking = 1.0 if is_double_loop and loop_symmetry < 0.5 else 0.0
-            
+            balanced_thinking = 1.0 if loop_symmetry < 0.5 else 0.0
+
             return {
-                'double_loop_detected': float(1.0 if is_double_loop else 0.0),
-                'double_loop_count': float(loop_count),
+                'double_loop_detected': 1.0,
+                'double_loop_count': float(core_count),
                 'double_loop_symmetry': float(1.0 - min(1.0, loop_symmetry)),
                 'double_loop_balanced_thinking': float(balanced_thinking),
                 'double_loop_creative_structured_balance': float(balanced_thinking)
             }
         except Exception as e:
             logger.warning(f"Double loop detection failed: {e}")
-            return {
-                'double_loop_detected': 0.0,
-                'double_loop_count': 0.0,
-                'double_loop_symmetry': 0.5,
-                'double_loop_balanced_thinking': 0.0,
-                'double_loop_creative_structured_balance': 0.0
-            }
+            return zero
     
     def _detect_peacocks_eye(self, image: np.ndarray) -> Dict[str, float]:
-        # Detect Peacock's Eye patterns for artistic potential and visual creativity - ALGORITHMIC DERIVATION
+        """
+        Detect Peacock's Eye (CADA Central Pocket, codes Wp / Rp).
+
+        CADA definition: a small eye-like complete circle enclosed at the
+        pattern centre of a whorl-family print (1 core, 2 triradii). The
+        previous implementation fired whenever Hough found >= 3 circles, which
+        is true of ANY whorl (concentric ridges are circles), producing false
+        positives on most whorls. Detection is now gated on the classified
+        subtype; Hough circles are used only as supporting evidence near the core.
+        """
+        zero = {
+            'peacock_eye_detected': 0.0,
+            'peacock_circular_shell_score': 0.0,
+            'peacock_artistic_potential': 0.0,
+            'peacock_visual_creativity': 0.0
+        }
         try:
+            cls = self._last_classification or {}
+            family = str(cls.get('family', 'unknown'))
+            subtype = str(cls.get('subtype', '?'))
+
+            # Central pocket subtypes per CADA Table 2.1 (Wp = central pocket /
+            # peacock's eye, Rp = radial pocket). Only whorl-family prints qualify.
+            is_pocket_subtype = subtype in ('Wp', 'Rp')
+            if family != 'whorl' and not is_pocket_subtype:
+                return zero
+
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
-            
-            # Look for circular shell patterns with artistic characteristics
-            # Use Hough Circle detection
+
+            # Supporting evidence: a small, tight circle near the core ("the eye").
             circles = cv2.HoughCircles(
                 gray, cv2.HOUGH_GRADIENT, dp=1, minDist=20,
-                param1=50, param2=30, minRadius=10, maxRadius=100
+                param1=50, param2=30, minRadius=5, maxRadius=40
             )
-            
+
+            eye_evidence = 0.0
             if circles is not None:
                 circles = np.round(circles[0, :]).astype("int")
-                circular_shell_score = min(1.0, len(circles) / 10.0)
-                artistic_potential = min(1.0, circular_shell_score * 1.5)
-                is_peacocks_eye = 1.0 if len(circles) >= 3 else 0.0
-            else:
-                circular_shell_score = 0.2
-                artistic_potential = 0.3
-                is_peacocks_eye = 0.0
-            
+                cores = (cls.get('singular_points', {}) or {}).get('cores') or []
+                if cores:
+                    cx, cy = int(cores[0]['x']), int(cores[0]['y'])
+                    # Small circles whose centre lies close to the pattern core.
+                    near_core = [
+                        c for c in circles
+                        if abs(int(c[0]) - cx) < 30 and abs(int(c[1]) - cy) < 30
+                    ]
+                    eye_evidence = min(1.0, len(near_core) / 3.0)
+                else:
+                    eye_evidence = min(1.0, len(circles) / 10.0)
+
+            is_peacocks_eye = 1.0 if (is_pocket_subtype or eye_evidence >= 0.67) else 0.0
+            circular_shell_score = eye_evidence if is_peacocks_eye else min(eye_evidence, 0.5)
+            artistic_potential = min(1.0, circular_shell_score * 1.5) if is_peacocks_eye else 0.0
+
             return {
                 'peacock_eye_detected': float(is_peacocks_eye),
                 'peacock_circular_shell_score': float(circular_shell_score),
@@ -878,12 +1011,7 @@ class OptimizedFeatureExtractor:
             }
         except Exception as e:
             logger.warning(f"Peacock's eye detection failed: {e}")
-            return {
-                'peacock_eye_detected': 0.0,
-                'peacock_circular_shell_score': 0.2,
-                'peacock_artistic_potential': 0.3,
-                'peacock_visual_creativity': 0.2
-            }
+            return zero
     
     def _detect_reverse_shell(self, image: np.ndarray) -> Dict[str, float]:
         # Detect reverse shell patterns for non-linear decision-making and abstract reasoning - ALGORITHMIC DERIVATION
@@ -914,11 +1042,12 @@ class OptimizedFeatureExtractor:
             }
         except Exception as e:
             logger.warning(f"Reverse shell detection failed: {e}")
+            # Real-data policy: on failure report absence (0.0), never fabricated mid-range values.
             return {
                 'reverse_shell_detected': 0.0,
-                'reverse_shell_flow_score': 0.5,
-                'reverse_shell_non_linear_score': 0.3,
-                'reverse_shell_abstract_reasoning': 0.3,
+                'reverse_shell_flow_score': 0.0,
+                'reverse_shell_non_linear_score': 0.0,
+                'reverse_shell_abstract_reasoning': 0.0,
                 'reverse_shell_non_linear_decision_making': 0.0
             }
     
@@ -941,16 +1070,24 @@ class OptimizedFeatureExtractor:
             features.append(complexity)
             
             # 3. Symmetry analysis
-            symmetry = float(self._calculate_symmetry(gray))
+            symmetry = _f(self._calculate_symmetry(gray))
             features.append(symmetry)
             
             # Calculate composite characteristics
             pattern_diversity = float(np.std(features))
             adaptability_score = float(min(1.0, pattern_diversity * 2.0))
             polymath_traits = float(min(1.0, adaptability_score * 1.2))
-            
-            is_composite = float(1.0 if pattern_diversity > 0.3 else 0.0)
-            
+
+            # CADA: a composite/mixed print is an accidental-family pattern or a
+            # twin-core whorl (Wc). Texture diversity alone is not sufficient
+            # evidence — gate the boolean on the classified pattern.
+            cls = self._last_classification or {}
+            family = str(cls.get('family', 'unknown'))
+            subtype = str(cls.get('subtype', '?'))
+            is_composite = float(
+                1.0 if (family == 'accidental' or subtype == 'Wc') and pattern_diversity > 0.3 else 0.0
+            )
+
             return {
                 'composite_pattern_detected': is_composite,
                 'composite_pattern_diversity': pattern_diversity,
@@ -960,21 +1097,65 @@ class OptimizedFeatureExtractor:
             }
         except Exception as e:
             logger.warning(f"Composite pattern analysis failed: {e}")
+            # Real-data policy: on failure report absence (0.0), never fabricated mid-range values.
             return {
                 'composite_pattern_detected': 0.0,
-                'composite_pattern_diversity': 0.2,
-                'composite_adaptability_score': 0.4,
-                'composite_polymath_traits': 0.5
+                'composite_pattern_diversity': 0.0,
+                'composite_adaptability_score': 0.0,
+                'composite_polymath_traits': 0.0
             }
 
 
-    def _analyze_atd_angles(self, image: np.ndarray) -> Dict[str, float]:
-        # ATD Angle Analysis - NOT APPLICABLE FOR FINGERPRINTS (PALM ONLY)
-        # Returns default values to maintain schema compatibility
+    def _calculate_tfrc(self, image: np.ndarray) -> float:
+        """
+        Calculate Total Fingerprint Ridge Count (TFRC) using the standard
+        core-to-delta counting method defined in pattern_classifier.py.
+
+        Scientific method: Draw a line from the Core singular point to the Delta
+        (triradius) singular point. Count the ridges that cross that line.
+        - Arch: 0 ridges (no true core/delta pair)
+        - Loop: 1 count  (1 core, 1 delta)
+        - Whorl: max of 2 counts (2 deltas, use the higher count per standard)
+
+        Returns:
+            int (as float): Ridge count, typically 0-30 for a single finger.
+        """
+        if self.pattern_classifier is None:
+            logger.warning("TFRC: PatternClassifier not available, returning 0")
+            return 0.0
+        try:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
+            orientation_field = self.pattern_classifier._compute_orientation_field(gray)
+            cores, deltas = self.pattern_classifier._detect_singular_points(gray, orientation_field)
+
+            # Arch pattern (no core/delta pair) = 0 ridges by DMIT standard
+            if not cores or not deltas:
+                logger.info("TFRC: No core-delta pair (Arch pattern), returning 0")
+                return 0.0
+
+            tfrc_result = self.pattern_classifier.calculate_tfrc(gray, cores, deltas)
+            ridge_count = int(tfrc_result['ridge_count'])  # Cast to int — ridge count is always a whole number
+            logger.info(f"TFRC calculated: {ridge_count} ridges (cores={len(cores)}, deltas={len(deltas)})")
+            return float(ridge_count)
+        except Exception as e:
+            logger.warning(f"TFRC calculation failed: {e}")
+            return None
+
+    def _analyze_atd_angles(self, _image: np.ndarray) -> Dict[str, float]:
+        """
+        ATD Angle Analysis — NOT APPLICABLE FOR INDIVIDUAL FINGERPRINTS.
+        ATD angle requires a full palm print (angle between the a-triradius,
+        t-triradius, and d-triradius on the palm). It cannot be measured from
+        a single fingertip image.
+
+        Returns None for all ATD values so that downstream mappers and the
+        PDF generator can detect and gracefully skip ATD-dependent metrics
+        rather than computing with fake data.
+        """
         return {
-            'atd_average_angle': 0.0,
-            'atd_thought_directionality': 0.5,
-            'atd_speed_of_execution': 0.5
+            'atd_average_angle': None,
+            'atd_thought_directionality': None,
+            'atd_speed_of_execution': None
         }
 
     def _analyze_pattern_symmetry(self, image: np.ndarray) -> Dict[str, float]:
@@ -983,7 +1164,7 @@ class OptimizedFeatureExtractor:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
             
             # Calculate left-right symmetry
-            height, width = gray.shape
+            _, width = gray.shape
             mid_point = width // 2
             
             left_half = gray[:, :mid_point]
@@ -1055,7 +1236,7 @@ class OptimizedFeatureExtractor:
             if topology_data:
                 betti_1 = int(topology_data['betti_1'])
             else:
-                betti_1 = int(self._calculate_betti_1(image))
+                betti_1 = _i(self._calculate_betti_1(image))
             
             # Calculate complexity metrics based on cycle count
             # Normalize: 0-10 loops -> 0-1.0
@@ -1078,94 +1259,44 @@ class OptimizedFeatureExtractor:
                 'betti_topological_complexity': 0.1
             }
     
-    def _extract_quantum_consciousness_features(self, image: np.ndarray) -> Dict[str, float]:
-        # Extract quantum consciousness features based on Penrose-Hameroff theory - ALGORITHMIC DERIVATION
-        try:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
-            
-            # Quantum Consciousness Score - Overall quantum coherence
-            quantum_coherence = self._calculate_quantum_coherence(gray)
-            
-            # Orchestrated Objective Reduction (Orch-OR)
-            orch_or_score = self._calculate_orch_or_score(gray)
-            
-            # Microtubule Computation
-            microtubule_score = self._calculate_microtubule_computation(gray)
-            
-            # Nuclear Spin Patterns
-            nuclear_spin_score = self._calculate_nuclear_spin_patterns(gray)
-            
-            # Consciousness Frequency (40Hz gamma waves)
-            consciousness_freq = self._calculate_consciousness_frequency(gray)
-            
-            # Quantum Entanglement
-            entanglement_score = self._calculate_quantum_entanglement(gray)
-            
-            return {
-                'quantum_consciousness_score': float(quantum_coherence),
-                'orchestrated_objective_reduction': float(orch_or_score),
-                'microtubule_computation': float(microtubule_score),
-                'nuclear_spin_patterns': float(nuclear_spin_score),
-                'consciousness_frequency': float(consciousness_freq),
-                'quantum_entanglement': float(entanglement_score)
-            }
-        except Exception as e:
-            logger.warning(f"Quantum consciousness analysis failed: {e}")
-            return {
-                'quantum_consciousness_score': 0.5,
-                'orchestrated_objective_reduction': 0.6,
-                'microtubule_computation': 0.7,
-                'nuclear_spin_patterns': 0.6,
-                'consciousness_frequency': 0.5,
-                'quantum_entanglement': 0.6
-            }
+    def _extract_quantum_consciousness_features(self, _image: np.ndarray) -> Dict[str, float]:
+        """
+        REMOVED: Quantum consciousness features had no scientific basis.
+        A 2D fingerprint image contains no information about quantum states,
+        microtubule computation, or nuclear spin patterns.
 
-    def _extract_brain_criticality_features(self, image: np.ndarray) -> Dict[str, float]:
-        # Extract brain criticality features based on edge-of-chaos theory - ALGORITHMIC DERIVATION
-        try:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
-            
-            # Brain Criticality Score
-            criticality_score = self._calculate_brain_criticality(gray)
-            
-            # Edge of Chaos Score
-            edge_chaos_score = self._calculate_edge_of_chaos(gray)
-            
-            # Neural Avalanches
-            avalanche_score = self._calculate_neural_avalanches(gray)
-            
-            # Scale-Free Networks
-            scale_free_score = self._calculate_scale_free_networks(gray)
-            
-            # Power Law Distributions
-            power_law_score = self._calculate_power_law_distributions(gray)
-            
-            # Critical Slowing
-            critical_slowing_score = self._calculate_critical_slowing(gray)
-            
-            # Network Efficiency
-            network_efficiency_score = self._calculate_network_efficiency(gray)
-            
-            return {
-                'brain_criticality_score': float(criticality_score),
-                'edge_of_chaos_score': float(edge_chaos_score),
-                'neural_avalanches': float(avalanche_score),
-                'scale_free_networks': float(scale_free_score),
-                'power_law_distributions': float(power_law_score),
-                'critical_slowing': float(critical_slowing_score),
-                'network_efficiency': float(network_efficiency_score)
-            }
-        except Exception as e:
-            logger.warning(f"Brain criticality analysis failed: {e}")
-            return {
-                'brain_criticality_score': 0.7,
-                'edge_of_chaos_score': 0.6,
-                'neural_avalanches': 0.5,
-                'scale_free_networks': 0.6,
-                'power_law_distributions': 0.5,
-                'critical_slowing': 0.4,
-                'network_efficiency': 0.6
-            }
+        All values are returned as None so downstream code can detect and
+        skip them rather than treating pixel statistics as neuroscience.
+        """
+        logger.info("Quantum consciousness features: returning None (scientifically unsupported)")
+        return {
+            'quantum_consciousness_score': None,
+            'orchestrated_objective_reduction': None,
+            'microtubule_computation': None,
+            'nuclear_spin_patterns': None,
+            'consciousness_frequency': None,
+            'quantum_entanglement': None
+        }
+
+    def _extract_brain_criticality_features(self, _image: np.ndarray) -> Dict[str, float]:
+        """
+        REMOVED: Brain criticality features had no scientific basis.
+        Pixel histogram statistics cannot measure neural avalanches, scale-free
+        networks, or brain criticality from a static 2D fingerprint image.
+
+        All values are returned as None so downstream code can detect and
+        skip them rather than reporting fabricated neuroscience scores.
+        """
+        logger.info("Brain criticality features: returning None (scientifically unsupported)")
+        return {
+            'brain_criticality_score': None,
+            'edge_of_chaos_score': None,
+            'neural_avalanches': None,
+            'scale_free_networks': None,
+            'power_law_distributions': None,
+            'critical_slowing': None,
+            'network_efficiency': None
+        }
 
     def _extract_cross_spectral_features(self, image: np.ndarray) -> Dict[str, float]:
         # Extract cross-spectral fusion features - ALGORITHMIC DERIVATION
@@ -1192,18 +1323,19 @@ class OptimizedFeatureExtractor:
             }
         except Exception as e:
             logger.warning(f"Cross-spectral analysis failed: {e}")
+            # Real-data policy: on failure report absence (0.0), never fabricated mid-range values.
             return {
-                'cross_spectral_fusion_score': 0.7,
-                'multi_modal_integration': 0.6,
-                'spectral_coherence': 0.5,
-                'fusion_confidence': 0.6
+                'cross_spectral_fusion_score': 0.0,
+                'multi_modal_integration': 0.0,
+                'spectral_coherence': 0.0,
+                'fusion_confidence': 0.0
             }
     
     def _calculate_symmetry(self, image: np.ndarray) -> float:
         # Calculate image symmetry score - ALGORITHMIC DERIVATION
         try:
             # Simple symmetry calculation
-            h, w = image.shape
+            _, w = image.shape
             left_half = image[:, :w//2]
             right_half = np.fliplr(image[:, w//2:])
             
@@ -1218,89 +1350,33 @@ class OptimizedFeatureExtractor:
             
         except Exception as e:
             logger.warning(f"Symmetry calculation failed: {e}")
-            return 0.5
+            return None
     
 
     
-    def _calculate_intelligence_scores(self, features: Dict[str, float]) -> Dict[str, float]:
-        # Calculate intelligence correlations based on features - HEURISTIC MAPPING
-        scores = {}
-        
-        # Linguistic Intelligence
-        scores['linguistic'] = (
-            features.get('entropy', 0) * 0.3 +
-            features.get('fourier_harmonic_ratio', 0) * 0.2 +
-            features.get('pattern_symmetry_score', 0) * 0.5
-        ) / 100.0
-        
-        # Logical-Mathematical Intelligence
-        scores['logical_mathematical'] = (
-            features.get('box_counting_dimension', 0) * 0.4 +
-            features.get('topological_complexity', 0) * 0.3 +
-            features.get('graph_density', 0) * 0.3
-        ) / 100.0
-        
-        # Spatial Intelligence
-        scores['spatial'] = (
-            features.get('ridge_flow_quality', 0) * 0.4 +
-            features.get('dominant_direction', 0) * 0.3 +
-            features.get('symmetry_index', 0) * 0.3
-        ) / 100.0
-        
-        # Musical Intelligence
-        scores['musical'] = (
-            features.get('fourier_energy_total', 0) * 0.5 +
-            features.get('wavelet_complexity', 0) * 0.3 +
-            features.get('frequency_stability', 0) * 0.2
-        ) / 1000000.0
-        
-        # Bodily-Kinesthetic Intelligence
-        scores['bodily_kinesthetic'] = (
-            features.get('minutiae_count', 0) * 0.4 +
-            features.get('ridge_density', 0) * 0.3 +
-            features.get('contour_complexity', 0) * 0.3
-        ) / 100.0
-        
-        # Interpersonal Intelligence
-        scores['interpersonal'] = (
-            features.get('quantum_consciousness_score', 0) * 0.4 +
-            features.get('brain_criticality_score', 0) * 0.3 +
-            features.get('cross_spectral_fusion_score', 0) * 0.3
-        ) / 100.0
-        
-        # Intrapersonal Intelligence
-        scores['intrapersonal'] = (
-            features.get('orchestrated_objective_reduction', 0) * 0.4 +
-            features.get('neural_avalanches', 0) * 0.3 +
-            features.get('spectral_coherence', 0) * 0.3
-        ) / 100.0
-        
-        # Naturalistic Intelligence
-        scores['naturalistic'] = (
-            features.get('lacunarity', 0) * 0.4 +
-            features.get('pore_density', 0) * 0.3 +
-            features.get('micro_texture_entropy', 0) * 0.3
-        ) / 100.0
-        
-        # Normalize scores to 0-1 range
-        for key in scores:
-            scores[key] = max(0.0, min(1.0, scores[key]))
-        
-        return scores
+    def _calculate_intelligence_scores(self, _features: Dict[str, float]) -> Dict[str, float]:
+        """
+        REMOVED from extractor: Intelligence scores are calculated exclusively
+        by dmit_intelligence_mapper.py using validated DMIT Table 1.1 mappings.
+
+        Keeping this as an empty pass-through to avoid breaking callers.
+        The pipeline uses dmit_intelligence_mapper output, not this method.
+        """
+        return {}
     
     def _calculate_feature_confidence(self, features: Dict[str, float]) -> float:
         # Calculate confidence in feature extraction - ALGORITHMIC DERIVATION
         try:
-            # Based on feature count and quality
-            feature_count = len(features)
-            quality_score = features.get('overall_quality_score', 0.5)
-            
-            confidence = (feature_count / 85.0) * 0.6 + quality_score * 0.4
+            measured = sum(1 for v in features.values() if v is not None)
+            quality_score = features.get('overall_quality_score')
+            coverage = min(1.0, measured / 85.0)
+            if quality_score is None:
+                return float(coverage)
+            confidence = coverage * 0.6 + float(quality_score) * 0.4
             return float(max(0.0, min(1.0, confidence)))
-            
         except Exception as e:
             logger.warning(f"Confidence calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_data_reduction(self) -> float:
         # Calculate data reduction percentage
@@ -1317,7 +1393,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, confidence))
         except Exception as e:
             logger.warning(f"Extraction confidence calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_feature_stability(self, image: np.ndarray) -> float:
         # Calculate feature stability - ALGORITHMIC DERIVATION
@@ -1337,7 +1413,7 @@ class OptimizedFeatureExtractor:
             return float(max(0.0, min(1.0, stability)))
         except Exception as e:
             logger.warning(f"Feature stability calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_box_counting_dimension(self, image: np.ndarray) -> float:
         # Calculate box counting fractal dimension - ALGORITHMIC DERIVATION
@@ -1380,7 +1456,6 @@ class OptimizedFeatureExtractor:
             # 4. Fit line to log-log plot
             if len(counts) >= 3: # Need at least 3 points for a valid slope
                 coeffs = np.polyfit(log_scales, np.log(counts), 1)
-                dimension = coeffs[0]
                 # Typical fingerprint fractal dimension is 1.5 - 1.9
                 raw_dim = coeffs[0]
                 # logger.info(f"Raw FD: {raw_dim}")
@@ -1389,7 +1464,7 @@ class OptimizedFeatureExtractor:
             return 1.6
         except Exception as e:
             logger.warning(f"Box counting dimension calculation failed: {e}")
-            return 1.5
+            return None
             # Error handling duplication removed
     
     def _analyze_topology(self, image: np.ndarray) -> Dict[str, float]:
@@ -1402,7 +1477,7 @@ class OptimizedFeatureExtractor:
             binary = self._preprocess_for_topology(image)
             
             # 2. Betti-0 (Connected Components)
-            num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, connectivity=8)
+            num_labels, _, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
             h, w = binary.shape
             min_size = max(20, (h * w) // 5000)
             noise_count = np.sum(stats[1:, cv2.CC_STAT_AREA] < min_size)
@@ -1446,7 +1521,7 @@ class OptimizedFeatureExtractor:
                 return 0.3 
         except Exception as e:
             logger.warning(f"Lacunarity calculation failed: {e}")
-            return 0.3
+            return None
 
     def _preprocess_for_topology(self, image: np.ndarray) -> np.ndarray:
         """
@@ -1501,7 +1576,7 @@ class OptimizedFeatureExtractor:
             
             # 2. Remove small noise (dust) that inflates Betti-0
             # Find all components
-            num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, connectivity=8)
+            num_labels, _, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
             
             # Filter components smaller than threshold (adaptive to resolution)
             h, w = binary.shape
@@ -1514,7 +1589,7 @@ class OptimizedFeatureExtractor:
             return float(max(1.0, real_components))
         except Exception as e:
             logger.warning(f"Betti-0 calculation failed: {e}")
-            return 1.0
+            return None
     
     def _calculate_betti_1(self, image: np.ndarray) -> float:
         # Calculate Betti-1 (1-dimensional holes/loops) - ALGORITHMIC DERIVATION
@@ -1545,7 +1620,7 @@ class OptimizedFeatureExtractor:
             return float(holes)
         except Exception as e:
             logger.warning(f"Betti-1 calculation failed: {e}")
-            return 0.0
+            return None
     
     def _calculate_euler_characteristic(self, image: np.ndarray) -> float:
         # Calculate Euler characteristic - ALGORITHMIC DERIVATION
@@ -1555,7 +1630,7 @@ class OptimizedFeatureExtractor:
             return float(betti_0 - betti_1)
         except Exception as e:
             logger.warning(f"Euler characteristic calculation failed: {e}")
-            return 1.0
+            return None
     
     def _calculate_graph_density(self, image: np.ndarray) -> float:
         # Calculate graph density - ALGORITHMIC DERIVATION
@@ -1565,7 +1640,7 @@ class OptimizedFeatureExtractor:
             return float(edge_density)
         except Exception as e:
             logger.warning(f"Graph density calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_average_clustering(self, image: np.ndarray) -> float:
         # Calculate average clustering coefficient - ALGORITHMIC DERIVATION
@@ -1579,17 +1654,11 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, clustering))
         except Exception as e:
             logger.warning(f"Average clustering calculation failed: {e}")
-            return 0.5
+            return None
     
-    def _calculate_tfrc(self, image: np.ndarray) -> float:
-        # Calculate Total Fingerprint Ridge Count - ALGORITHMIC DERIVATION
-        try:
-            edges = cv2.Canny(image, 50, 150)
-            ridge_count = np.sum(edges) / edges.size
-            return float(ridge_count)
-        except Exception as e:
-            logger.warning(f"TFRC calculation failed: {e}")
-            return 15.0
+    # NOTE: _calculate_tfrc was previously defined here using edge density (INCORRECT).
+    # The correct implementation using core-to-delta ridge counting is defined above.
+
     
     def _calculate_ridge_density(self, image: np.ndarray) -> float:
         # Calculate ridge density - ALGORITHMIC DERIVATION
@@ -1599,7 +1668,7 @@ class OptimizedFeatureExtractor:
             return float(density)
         except Exception as e:
             logger.warning(f"Ridge density calculation failed: {e}")
-            return 0.7
+            return None
     
     def _calculate_pore_density(self, image: np.ndarray) -> float:
         # Calculate pore density - ALGORITHMIC DERIVATION
@@ -1615,10 +1684,11 @@ class OptimizedFeatureExtractor:
                 density = pore_count / (image.shape[0] * image.shape[1]) * 1000
                 return float(density)
             else:
-                return 0.25
+                # No pores resolvable at this resolution: report 0, not a fabricated 0.25.
+                return 0.0
         except Exception as e:
             logger.warning(f"Pore density calculation failed: {e}")
-            return 0.25
+            return None
     
     def _calculate_incipient_ridge_count(self, image: np.ndarray) -> float:
         # Calculate incipient ridge count - ALGORITHMIC DERIVATION
@@ -1630,7 +1700,7 @@ class OptimizedFeatureExtractor:
             return float(ridge_count)
         except Exception as e:
             logger.warning(f"Incipient ridge count calculation failed: {e}")
-            return 20.0
+            return None
     
     def _calculate_fourier_harmonic_ratio(self, image: np.ndarray) -> float:
         # Calculate Fourier harmonic ratio - ALGORITHMIC DERIVATION
@@ -1649,7 +1719,7 @@ class OptimizedFeatureExtractor:
                 return 0.7
         except Exception as e:
             logger.warning(f"Fourier harmonic ratio calculation failed: {e}")
-            return 0.7
+            return None
     
     def _calculate_correlation_dimension(self, image: np.ndarray) -> float:
         # Calculate correlation dimension - ALGORITHMIC DERIVATION
@@ -1660,7 +1730,7 @@ class OptimizedFeatureExtractor:
             return float(correlation_dim)
         except Exception as e:
             logger.warning(f"Correlation dimension calculation failed: {e}")
-            return 1.7
+            return None
     
     def _calculate_scale_consistency(self, image: np.ndarray) -> float:
         # Calculate scale consistency - ALGORITHMIC DERIVATION
@@ -1679,7 +1749,7 @@ class OptimizedFeatureExtractor:
             return float(max(0.0, min(1.0, consistency)))
         except Exception as e:
             logger.warning(f"Scale consistency calculation failed: {e}")
-            return 0.8
+            return None
     
     def _calculate_persistence_entropy(self, image: np.ndarray) -> float:
         # Calculate persistence entropy (via Orientation Field) - ALGORITHMIC DERIVATION
@@ -1688,7 +1758,7 @@ class OptimizedFeatureExtractor:
             return self._calculate_orientation_entropy(image)
         except Exception as e:
             logger.warning(f"Persistence entropy calculation failed: {e}")
-            return 2.5
+            return None
     
     def _calculate_topological_complexity(self, image: np.ndarray) -> float:
         # Calculate topological complexity - ALGORITHMIC DERIVATION
@@ -1699,7 +1769,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, complexity))
         except Exception as e:
             logger.warning(f"Topological complexity calculation failed: {e}")
-            return 0.6
+            return None
     
     def _calculate_betweenness_centrality(self, image: np.ndarray) -> float:
         # Calculate betweenness centrality - ALGORITHMIC DERIVATION
@@ -1712,7 +1782,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, centrality))
         except Exception as e:
             logger.warning(f"Betweenness centrality calculation failed: {e}")
-            return 0.3
+            return None
     
     def _calculate_closeness_centrality(self, image: np.ndarray) -> float:
         # Calculate closeness centrality - ALGORITHMIC DERIVATION
@@ -1723,7 +1793,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, closeness))
         except Exception as e:
             logger.warning(f"Closeness centrality calculation failed: {e}")
-            return 0.4
+            return None
     
     def _calculate_modularity(self, image: np.ndarray) -> float:
         # Calculate modularity - ALGORITHMIC DERIVATION
@@ -1734,7 +1804,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, modularity))
         except Exception as e:
             logger.warning(f"Modularity calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_spectral_radius(self, image: np.ndarray) -> float:
         # Calculate spectral radius - ALGORITHMIC DERIVATION
@@ -1745,7 +1815,7 @@ class OptimizedFeatureExtractor:
             return float(spectral_radius)
         except Exception as e:
             logger.warning(f"Spectral radius calculation failed: {e}")
-            return 5.0
+            return None
     
     def _calculate_ridge_flow_quality(self, image: np.ndarray) -> float:
         # Calculate ridge flow quality - ALGORITHMIC DERIVATION
@@ -1762,7 +1832,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, quality))
         except Exception as e:
             logger.warning(f"Ridge flow quality calculation failed: {e}")
-            return 0.8
+            return None
     
     def _calculate_dominant_direction(self, image: np.ndarray) -> float:
         # Calculate dominant ridge direction - ALGORITHMIC DERIVATION
@@ -1777,7 +1847,7 @@ class OptimizedFeatureExtractor:
             return float(np.degrees(dominant_dir))
         except Exception as e:
             logger.warning(f"Dominant direction calculation failed: {e}")
-            return 45.0
+            return None
     
     def _calculate_symmetry_index(self, image: np.ndarray) -> float:
         # Calculate symmetry index - ALGORITHMIC DERIVATION
@@ -1786,20 +1856,38 @@ class OptimizedFeatureExtractor:
             return float(symmetry)
         except Exception as e:
             logger.warning(f"Symmetry index calculation failed: {e}")
-            return 0.7
+            return None
     
+    def _log_spectrum_dispersion(self, image: np.ndarray) -> float:
+        """
+        Coefficient of variation of the DC-excluded log-magnitude spectrum.
+
+        FIX: the previous spectral statistics used std/mean of the RAW FFT
+        magnitude. The DC component dominates a raw spectrum by orders of
+        magnitude, so std/mean was always >> 1: 'wavelet_complexity' saturated
+        at 1.0 and 'frequency_stability' was pinned at 0.0 for every print —
+        both fed the mapper's musical intelligence / temporal lobe / auditory
+        learning formulas as constants. Log-magnitude with the DC term removed
+        yields a bounded, discriminative dispersion measure.
+        """
+        fft = np.fft.fft2(image)
+        magnitude = np.abs(np.fft.fftshift(fft))
+        h, w = magnitude.shape
+        magnitude[h // 2, w // 2] = 0.0  # remove DC
+        log_mag = np.log1p(magnitude)
+        mean = float(np.mean(log_mag))
+        if mean <= 0:
+            return 0.0
+        return float(np.std(log_mag) / mean)
+
     def _calculate_frequency_stability(self, image: np.ndarray) -> float:
-        # Calculate frequency stability - ALGORITHMIC DERIVATION
+        # Frequency stability = 1 - dispersion of the (DC-excluded) log spectrum.
         try:
-            fft = np.fft.fft2(image)
-            magnitude = np.abs(fft)
-            
-            # Calculate frequency stability
-            stability = 1.0 - (np.std(magnitude) / np.mean(magnitude))
-            return float(max(0.0, min(1.0, stability)))
+            dispersion = self._log_spectrum_dispersion(image)
+            return float(max(0.0, min(1.0, 1.0 - dispersion)))
         except Exception as e:
             logger.warning(f"Frequency stability calculation failed: {e}")
-            return 0.8
+            return None
     
     def _calculate_micro_texture_entropy(self, image: np.ndarray) -> float:
         # Calculate micro texture entropy - ALGORITHMIC DERIVATION
@@ -1817,7 +1905,7 @@ class OptimizedFeatureExtractor:
             return float(entropy)
         except Exception as e:
             logger.warning(f"Micro texture entropy calculation failed: {e}")
-            return 2.1
+            return None
     
     def _calculate_contour_complexity(self, image: np.ndarray) -> float:
         # Calculate contour complexity - ALGORITHMIC DERIVATION
@@ -1835,21 +1923,17 @@ class OptimizedFeatureExtractor:
             return float(complexity)
         except Exception as e:
             logger.warning(f"Contour complexity calculation failed: {e}")
-            return 0.6
+            return None
     
     def _calculate_wavelet_complexity(self, image: np.ndarray) -> float:
-        # Calculate wavelet complexity - ALGORITHMIC DERIVATION
+        # Spectral complexity = dispersion of the (DC-excluded) log spectrum.
+        # See _log_spectrum_dispersion for why raw-magnitude std/mean was broken.
         try:
-            # Simplified wavelet complexity
-            fft = np.fft.fft2(image)
-            magnitude = np.abs(fft)
-            
-            # Calculate complexity as energy distribution
-            complexity = np.std(magnitude) / np.mean(magnitude)
-            return float(min(1.0, complexity))
+            dispersion = self._log_spectrum_dispersion(image)
+            return float(min(1.0, dispersion))
         except Exception as e:
             logger.warning(f"Wavelet complexity calculation failed: {e}")
-            return 0.8
+            return None
     
     def _calculate_power_concentration(self, image: np.ndarray) -> float:
         # Calculate power concentration - ALGORITHMIC DERIVATION
@@ -1868,7 +1952,7 @@ class OptimizedFeatureExtractor:
                 return 0.7
         except Exception as e:
             logger.warning(f"Power concentration calculation failed: {e}")
-            return 0.7
+            return None
     
     # Additional comprehensive calculation methods
     def _calculate_information_dimension(self, image: np.ndarray) -> float:
@@ -1880,7 +1964,7 @@ class OptimizedFeatureExtractor:
             return float(info_dim)
         except Exception as e:
             logger.warning(f"Information dimension calculation failed: {e}")
-            return 1.6
+            return None
     
     def _calculate_differential_box_counting(self, image: np.ndarray) -> float:
         # Calculate differential box counting - ALGORITHMIC DERIVATION
@@ -1891,7 +1975,7 @@ class OptimizedFeatureExtractor:
             return float(diff_dim)
         except Exception as e:
             logger.warning(f"Differential box counting calculation failed: {e}")
-            return 1.8
+            return None
     
     def _calculate_bottleneck_distance(self, image: np.ndarray) -> float:
         # Calculate bottleneck distance - ALGORITHMIC DERIVATION
@@ -1902,7 +1986,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, bottleneck))
         except Exception as e:
             logger.warning(f"Bottleneck distance calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_wasserstein_distance(self, image: np.ndarray) -> float:
         # Calculate Wasserstein distance - ALGORITHMIC DERIVATION
@@ -1913,7 +1997,7 @@ class OptimizedFeatureExtractor:
             return float(wasserstein)
         except Exception as e:
             logger.warning(f"Wasserstein distance calculation failed: {e}")
-            return 0.3
+            return None
     
     def _calculate_eigenvector_centrality(self, image: np.ndarray) -> float:
         # Calculate eigenvector centrality - ALGORITHMIC DERIVATION
@@ -1924,7 +2008,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, eigenvector))
         except Exception as e:
             logger.warning(f"Eigenvector centrality calculation failed: {e}")
-            return 0.4
+            return None
     
     def _calculate_pagerank_score(self, image: np.ndarray) -> float:
         # Calculate PageRank score - ALGORITHMIC DERIVATION
@@ -1935,7 +2019,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, pagerank))
         except Exception as e:
             logger.warning(f"PageRank score calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_ridge_thickness(self, image: np.ndarray) -> float:
         # Calculate ridge thickness - ALGORITHMIC DERIVATION
@@ -1946,7 +2030,7 @@ class OptimizedFeatureExtractor:
             return float(thickness)
         except Exception as e:
             logger.warning(f"Ridge thickness calculation failed: {e}")
-            return 3.0
+            return None
     
     def _calculate_valley_thickness(self, image: np.ndarray) -> float:
         # Calculate valley thickness - ALGORITHMIC DERIVATION
@@ -1957,7 +2041,7 @@ class OptimizedFeatureExtractor:
             return float(valley_thickness)
         except Exception as e:
             logger.warning(f"Valley thickness calculation failed: {e}")
-            return 2.0
+            return None
     
     def _calculate_edge_density(self, image: np.ndarray) -> float:
         # Calculate edge density - ALGORITHMIC DERIVATION
@@ -1967,7 +2051,7 @@ class OptimizedFeatureExtractor:
             return float(density)
         except Exception as e:
             logger.warning(f"Edge density calculation failed: {e}")
-            return 0.4
+            return None
     
     def _calculate_contour_count(self, image: np.ndarray) -> float:
         # Calculate contour count - ALGORITHMIC DERIVATION
@@ -1977,7 +2061,7 @@ class OptimizedFeatureExtractor:
             return float(len(contours))
         except Exception as e:
             logger.warning(f"Contour count calculation failed: {e}")
-            return 15.0
+            return None
     
     def _calculate_spectral_rolloff(self, image: np.ndarray) -> float:
         # Calculate spectral rolloff - ALGORITHMIC DERIVATION
@@ -1991,7 +2075,7 @@ class OptimizedFeatureExtractor:
             
             # Find 85% energy point
             threshold = total_energy * 0.85
-            rolloff_idx = np.where(cumulative_energy >= threshold)[0]
+            rolloff_idx = np.nonzero(cumulative_energy >= threshold)[0]
             
             if len(rolloff_idx) > 0:
                 rolloff = rolloff_idx[0] / len(magnitude.flatten()) * 255
@@ -2000,7 +2084,7 @@ class OptimizedFeatureExtractor:
                 return 128.0
         except Exception as e:
             logger.warning(f"Spectral rolloff calculation failed: {e}")
-            return 128.0
+            return None
     
     def _calculate_spectral_flatness(self, image: np.ndarray) -> float:
         # Calculate spectral flatness - ALGORITHMIC DERIVATION
@@ -2019,14 +2103,13 @@ class OptimizedFeatureExtractor:
                 return 0.3
         except Exception as e:
             logger.warning(f"Spectral flatness calculation failed: {e}")
-            return 0.3
+            return None
     
     def _calculate_quantum_coherence(self, image: np.ndarray) -> float:
         # Calculate quantum coherence - ALGORITHMIC DERIVATION
         try:
             # Analyze spatial coherence patterns
             fft = np.fft.fft2(image)
-            magnitude = np.abs(fft)
             
             # Calculate coherence as phase consistency
             phase = np.angle(fft)
@@ -2036,7 +2119,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, coherence))
         except Exception as e:
             logger.warning(f"Quantum coherence calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_orch_or_score(self, image: np.ndarray) -> float:
         # Calculate Orchestrated Objective Reduction score - ALGORITHMIC DERIVATION
@@ -2050,7 +2133,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, orch_or))
         except Exception as e:
             logger.warning(f"Orch-OR calculation failed: {e}")
-            return 0.6
+            return None
     
     def _calculate_microtubule_computation(self, image: np.ndarray) -> float:
         # Calculate microtubule computation efficiency - ALGORITHMIC DERIVATION
@@ -2064,7 +2147,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, computation_efficiency))
         except Exception as e:
             logger.warning(f"Microtubule computation calculation failed: {e}")
-            return 0.7
+            return None
     
     def _calculate_nuclear_spin_patterns(self, image: np.ndarray) -> float:
         # Calculate nuclear spin pattern coherence - ALGORITHMIC DERIVATION
@@ -2080,7 +2163,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, spin_coherence))
         except Exception as e:
             logger.warning(f"Nuclear spin calculation failed: {e}")
-            return 0.6
+            return None
     
     def _calculate_consciousness_frequency(self, image: np.ndarray) -> float:
         # Calculate consciousness frequency (Gamma wave equivalent) - ALGORITHMIC DERIVATION
@@ -2097,7 +2180,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, consciousness_freq * 2.0))
         except Exception as e:
             logger.warning(f"Consciousness frequency calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_quantum_entanglement(self, image: np.ndarray) -> float:
         # Calculate quantum entanglement complexity - ALGORITHMIC DERIVATION
@@ -2121,7 +2204,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, entanglement))
         except Exception as e:
             logger.warning(f"Quantum entanglement calculation failed: {e}")
-            return 0.6
+            return None
     
     def _calculate_brain_criticality(self, image: np.ndarray) -> float:
         # Calculate brain criticality score (edge-of-chaos) - ALGORITHMIC DERIVATION
@@ -2136,7 +2219,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, criticality))
         except Exception as e:
             logger.warning(f"Brain criticality calculation failed: {e}")
-            return 0.7
+            return None
     
     def _calculate_edge_of_chaos(self, image: np.ndarray) -> float:
         # Calculate edge-of-chaos score - ALGORITHMIC DERIVATION
@@ -2150,7 +2233,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, edge_chaos))
         except Exception as e:
             logger.warning(f"Edge of chaos calculation failed: {e}")
-            return 0.6
+            return None
     
     def _calculate_neural_avalanches(self, image: np.ndarray) -> float:
         # Calculate neural avalanche characteristics - ALGORITHMIC DERIVATION
@@ -2160,13 +2243,13 @@ class OptimizedFeatureExtractor:
             binary = (image > threshold).astype(np.uint8)
             
             # Count connected components (avalanches)
-            num_labels, labels = cv2.connectedComponents(binary)
+            num_labels, _ = cv2.connectedComponents(binary)
             avalanche_size = num_labels / (image.shape[0] * image.shape[1]) * 1000
             
             return float(min(1.0, avalanche_size / 100.0))
         except Exception as e:
             logger.warning(f"Neural avalanches calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_scale_free_networks(self, image: np.ndarray) -> float:
         # Calculate scale-free network properties - ALGORITHMIC DERIVATION
@@ -2183,7 +2266,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, scale_free_quality / 2.0))
         except Exception as e:
             logger.warning(f"Scale-free networks calculation failed: {e}")
-            return 0.6
+            return None
     
     def _calculate_power_law_distributions(self, image: np.ndarray) -> float:
         # Calculate power-law distribution fit quality - ALGORITHMIC DERIVATION
@@ -2231,7 +2314,7 @@ class OptimizedFeatureExtractor:
             return 0.5
         except Exception as e:
             logger.warning(f"Power-law distributions calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_critical_slowing(self, image: np.ndarray) -> float:
         # Calculate critical slowing down - ALGORITHMIC DERIVATION
@@ -2243,7 +2326,7 @@ class OptimizedFeatureExtractor:
             return float(critical_slowing)
         except Exception as e:
             logger.warning(f"Critical slowing calculation failed: {e}")
-            return 0.4
+            return None
     
     def _calculate_network_efficiency(self, image: np.ndarray) -> float:
         # Calculate network efficiency - ALGORITHMIC DERIVATION
@@ -2257,39 +2340,55 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, efficiency))
         except Exception as e:
             logger.warning(f"Network efficiency calculation failed: {e}")
-            return 0.6
+            return None
     
     def _calculate_cross_spectral_fusion(self, image: np.ndarray) -> float:
-        # Calculate cross-spectral fusion score - ALGORITHMIC DERIVATION
+        """
+        Balance between low- and high-frequency band energy.
+
+        FIX: the old low/high MEAN ratio included the DC component in the
+        low band, so the ratio was astronomically large and min(1.0, ...)
+        saturated at 1.0 for every print. Using the DC-excluded shifted
+        spectrum and the bounded ratio low/(low+high) yields a real [0,1]
+        balance measure (0.5 = perfectly balanced bands).
+        """
         try:
-            # Analyze multi-spectral integration
-            fft = np.fft.fft2(image)
+            fft = np.fft.fftshift(np.fft.fft2(image))
             magnitude = np.abs(fft)
-            
-            # Cross-spectral coherence
-            low_freq = magnitude[:magnitude.shape[0]//4, :magnitude.shape[1]//4]
-            high_freq = magnitude[magnitude.shape[0]//4:, magnitude.shape[1]//4:]
-            
-            fusion_score = np.mean(low_freq) / (np.mean(high_freq) + 1e-10)
-            return float(min(1.0, fusion_score))
+            h, w = magnitude.shape
+            cy, cx = h // 2, w // 2
+            magnitude[cy, cx] = 0.0  # remove DC
+
+            # Radial band split at a quarter of the Nyquist radius
+            yy, xx = np.ogrid[:h, :w]
+            radius = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+            band_cut = min(cy, cx) / 4.0
+            low = float(np.mean(magnitude[radius <= band_cut]))
+            high = float(np.mean(magnitude[radius > band_cut]))
+            total = low + high
+            if total <= 0:
+                return 0.0
+            return float(low / total)
         except Exception as e:
             logger.warning(f"Cross-spectral fusion calculation failed: {e}")
-            return 0.7
-    
+            return None
+
     def _calculate_multi_modal_integration(self, image: np.ndarray) -> float:
-        # Calculate multi-modal integration score - ALGORITHMIC DERIVATION
+        """
+        Agreement between spatial, spectral, and texture dispersion measures.
+
+        FIX: the old version averaged a raw complex-FFT std (~1e5) with pixel
+        stds, so /100 always saturated at 1.0. Each modality is now normalized
+        to [0,1] on its own realistic scale before combining.
+        """
         try:
-            # Analyze integration across different modalities
-            spatial_features = np.std(image)
-            frequency_features = np.std(np.fft.fft2(image))
-            texture_features = np.std(cv2.Laplacian(image, cv2.CV_64F))
-            
-            # Integration quality
-            integration = (spatial_features + frequency_features + texture_features) / 3.0
-            return float(min(1.0, integration / 100.0))
+            spatial = min(1.0, float(np.std(image)) / 80.0)            # pixel contrast (std ~40-80)
+            spectral = min(1.0, self._log_spectrum_dispersion(image))  # bounded spectrum dispersion
+            texture = min(1.0, float(np.std(cv2.Laplacian(image, cv2.CV_64F))) / 60.0)
+            return float((spatial + spectral + texture) / 3.0)
         except Exception as e:
             logger.warning(f"Multi-modal integration calculation failed: {e}")
-            return 0.6
+            return None
     
     def _calculate_spectral_coherence(self, image: np.ndarray) -> float:
         # Calculate spectral coherence - ALGORITHMIC DERIVATION
@@ -2303,7 +2402,7 @@ class OptimizedFeatureExtractor:
             return float(max(0.0, coherence))
         except Exception as e:
             logger.warning(f"Spectral coherence calculation failed: {e}")
-            return 0.5
+            return None
     
     def _calculate_fusion_confidence(self, image: np.ndarray) -> float:
         # Calculate fusion confidence - ALGORITHMIC DERIVATION
@@ -2316,7 +2415,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, confidence))
         except Exception as e:
             logger.warning(f"Fusion confidence calculation failed: {e}")
-            return 0.6
+            return None
     
     def _calculate_skewness(self, image: np.ndarray) -> float:
         # Calculate image skewness - ALGORITHMIC DERIVATION
@@ -2329,7 +2428,7 @@ class OptimizedFeatureExtractor:
             return float(skewness)
         except Exception as e:
             logger.warning(f"Skewness calculation failed: {e}")
-            return 0.0
+            return None
     
     def _calculate_kurtosis(self, image: np.ndarray) -> float:
         # Calculate image kurtosis - ALGORITHMIC DERIVATION
@@ -2342,7 +2441,7 @@ class OptimizedFeatureExtractor:
             return float(kurtosis)
         except Exception as e:
             logger.warning(f"Kurtosis calculation failed: {e}")
-            return 0.0
+            return None
     
     def _calculate_neural_complexity(self, image: np.ndarray) -> float:
         # Calculate neural complexity - ALGORITHMIC DERIVATION
@@ -2353,7 +2452,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, complexity))
         except Exception as e:
             logger.warning(f"Neural complexity calculation failed: {e}")
-            return 0.8
+            return None
     
     def _calculate_information_integration(self, image: np.ndarray) -> float:
         # Calculate information integration - ALGORITHMIC DERIVATION
@@ -2364,7 +2463,7 @@ class OptimizedFeatureExtractor:
             return float(integration)
         except Exception as e:
             logger.warning(f"Information integration calculation failed: {e}")
-            return 0.75
+            return None
     
     def _calculate_spectral_entropy(self, image: np.ndarray) -> float:
         # Calculate spectral entropy - ALGORITHMIC DERIVATION
@@ -2381,7 +2480,7 @@ class OptimizedFeatureExtractor:
             return float(entropy)
         except Exception as e:
             logger.warning(f"Spectral entropy calculation failed: {e}")
-            return 2.3
+            return None
     
     def _calculate_frequency_modulation(self, image: np.ndarray) -> float:
         # Calculate frequency modulation - ALGORITHMIC DERIVATION
@@ -2393,7 +2492,7 @@ class OptimizedFeatureExtractor:
             return float(min(1.0, modulation))
         except Exception as e:
             logger.warning(f"Frequency modulation calculation failed: {e}")
-            return 0.7
+            return None
 
 
 def test_enhanced_clean_extractor():
@@ -2401,7 +2500,7 @@ def test_enhanced_clean_extractor():
     import sys
     try:
         sys.stdout.reconfigure(encoding='utf-8')
-    except:
+    except Exception:
         pass
         
     print("🚀 Testing Enhanced Optimized Feature Extractor (Clean)")
@@ -2438,7 +2537,7 @@ def test_enhanced_clean_extractor():
     print(f"✅ Feature extraction completed in {processing_time:.2f} seconds")
     
     # Display results
-    print(f"\n📈 Extraction Summary:")
+    print("\n📈 Extraction Summary:")
     print(f"   • Total features extracted: {result['extraction_summary']['total_features_extracted']}")
     print(f"   • Processing time: {result['extraction_summary']['processing_time_seconds']:.2f}s")
     print(f"   • Features per second: {result['extraction_summary']['features_per_second']:.1f}")
@@ -2447,43 +2546,43 @@ def test_enhanced_clean_extractor():
     print(f"   • Data reduction: {result['extraction_summary']['data_reduction_percentage']:.1f}%")
     print(f"   • Accuracy maintained: {result['extraction_summary']['accuracy_maintained']:.1%}")
     
-    print(f"\n🎯 Quality Metrics:")
+    print("\n🎯 Quality Metrics:")
     print(f"   • Image quality: {result['quality_metrics']['image_quality']:.3f}")
     print(f"   • Feature confidence: {result['quality_metrics']['feature_confidence']:.3f}")
     print(f"   • Extraction reliability: {result['quality_metrics']['extraction_reliability']:.1%}")
     
-    print(f"\n🧠 Intelligence Scores:")
+    print("\n🧠 Intelligence Scores:")
     for intelligence_type, score in result['intelligence_scores'].items():
         print(f"   • {intelligence_type.replace('_', ' ').title()}: {score:.3f}")
     
-    print(f"\n🔬 Sample Features (first 10):")
+    print("\n🔬 Sample Features (first 10):")
     features = result['consolidated_features']
     for i, (feature_name, value) in enumerate(list(features.items())[:10]):
         print(f"   • {feature_name}: {value:.4f}")
     
-    print(f"\n⚡ Advanced Pattern Features:")
+    print("\n⚡ Advanced Pattern Features:")
     pattern_features = {k: v for k, v in features.items() if 'whorl' in k or 'double_loop' in k or 'peacock' in k or 'reverse_shell' in k or 'composite' in k or 'atd' in k or 'pattern_symmetry' in k or 'fractal' in k or 'betti' in k or 'topology' in k}
     for feature_name, value in pattern_features.items():
         print(f"   • {feature_name}: {value:.4f}")
     
-    print(f"\n🌌 Quantum Consciousness Features:")
+    print("\n🌌 Quantum Consciousness Features:")
     quantum_features = {k: v for k, v in features.items() if 'quantum' in k or 'orchestrated' in k or 'microtubule' in k or 'nuclear_spin' in k or 'consciousness_frequency' in k or 'entanglement' in k}
     for feature_name, value in quantum_features.items():
         print(f"   • {feature_name}: {value:.4f}")
     
-    print(f"\n🧠 Brain Criticality Features:")
+    print("\n🧠 Brain Criticality Features:")
     criticality_features = {k: v for k, v in features.items() if 'criticality' in k or 'edge_of_chaos' in k or 'neural_avalanches' in k or 'scale_free' in k or 'power_law' in k or 'critical_slowing' in k or 'network_efficiency' in k}
     for feature_name, value in criticality_features.items():
         print(f"   • {feature_name}: {value:.4f}")
     
-    print(f"\n🔗 Cross-Spectral Features:")
+    print("\n🔗 Cross-Spectral Features:")
     cross_spectral_features = {k: v for k, v in features.items() if 'cross_spectral' in k or 'multi_modal' in k or 'spectral_coherence' in k or 'fusion_confidence' in k}
     for feature_name, value in cross_spectral_features.items():
         print(f"   • {feature_name}: {value:.4f}")
     
-    print(f"\n✅ Enhanced Clean Feature Extractor Test Completed Successfully!")
-    print(f"📊 All calculations are ALGORITHMICALLY DERIVED - no demo/fake values used")
-    print(f"🎯 Ready for production use with scanned fingerprint images")
+    print("\n✅ Enhanced Clean Feature Extractor Test Completed Successfully!")
+    print("📊 All calculations are ALGORITHMICALLY DERIVED - no demo/fake values used")
+    print("🎯 Ready for production use with scanned fingerprint images")
 
 
 if __name__ == "__main__":

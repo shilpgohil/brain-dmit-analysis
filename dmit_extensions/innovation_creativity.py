@@ -11,7 +11,7 @@ class InnovationCreativityExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class InnovationCreativityExtension(DMITExtensionBase):
         
         # Determine innovation creativity style based on dominant features
         innovation_styles = {
-            'creative_thinker': creative_thinking + divergent_thinking,
-            'innovation_generator': innovation_generation + idea_synthesis,
-            'problem_solver': problem_solving + pattern_recognition,
-            'conceptual_integrator': conceptual_integration + creative_adaptability,
-            'idea_synthesizer': idea_synthesis + creative_thinking,
+            'creative_thinker': (creative_thinking + divergent_thinking) / 2,
+            'innovation_generator': (innovation_generation + idea_synthesis) / 2,
+            'problem_solver': (problem_solving + pattern_recognition) / 2,
+            'conceptual_integrator': (conceptual_integration + creative_adaptability) / 2,
+            'idea_synthesizer': (idea_synthesis + creative_thinking) / 2,
             'balanced_innovator': (creative_thinking + innovation_generation) / 2
         }
         primary_style = max(innovation_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class InnovationCreativityExtension(DMITExtensionBase):
             'pattern_recognition': pattern_recognition,
             'conceptual_integration': conceptual_integration,
             'creative_adaptability': creative_adaptability,
-            'creative_potential': creative_thinking + innovation_generation,
-            'innovation_capacity': innovation_generation + idea_synthesis,
-            'problem_innovation': problem_solving + divergent_thinking,
-            'creative_synthesis': idea_synthesis + conceptual_integration,
-            'adaptive_creativity': creative_adaptability + pattern_recognition,
+            'creative_potential': (creative_thinking + innovation_generation) / 2,
+            'innovation_capacity': (innovation_generation + idea_synthesis) / 2,
+            'problem_innovation': (problem_solving + divergent_thinking) / 2,
+            'creative_synthesis': (idea_synthesis + conceptual_integration) / 2,
+            'adaptive_creativity': (creative_adaptability + pattern_recognition) / 2,
             'innovation_creativity_profile': self.classify_innovation_creativity_level(innovation_creativity_score)
         }
 
@@ -250,10 +250,7 @@ class InnovationCreativityExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = divergent thinking
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

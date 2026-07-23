@@ -11,7 +11,7 @@ class PersistenceGritExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class PersistenceGritExtension(DMITExtensionBase):
         
         # Determine persistence grit style based on dominant features
         grit_styles = {
-            'goal_oriented': goal_persistence + achievement_drive,
-            'consistent': effort_consistency + focus_persistence,
-            'resilient': resilience + endurance,
-            'determined': determination + motivation_persistence,
-            'enduring': endurance + goal_persistence,
-            'focused': focus_persistence + effort_consistency
+            'goal_oriented': (goal_persistence + achievement_drive) / 2,
+            'consistent': (effort_consistency + focus_persistence) / 2,
+            'resilient': (resilience + endurance) / 2,
+            'determined': (determination + motivation_persistence) / 2,
+            'enduring': (endurance + goal_persistence) / 2,
+            'focused': (focus_persistence + effort_consistency) / 2
         }
         primary_style = max(grit_styles.items(), key=lambda x: x[1])[0]
 
@@ -134,11 +134,11 @@ class PersistenceGritExtension(DMITExtensionBase):
             'focus_persistence': focus_persistence,
             'motivation_persistence': motivation_persistence,
             'achievement_drive': achievement_drive,
-            'goal_achievement': goal_persistence + achievement_drive,
-            'work_consistency': effort_consistency + focus_persistence,
-            'stress_resistance': resilience + endurance,
-            'motivation_stability': motivation_persistence + determination,
-            'long_term_focus': focus_persistence + goal_persistence,
+            'goal_achievement': (goal_persistence + achievement_drive) / 2,
+            'work_consistency': (effort_consistency + focus_persistence) / 2,
+            'stress_resistance': (resilience + endurance) / 2,
+            'motivation_stability': (motivation_persistence + determination) / 2,
+            'long_term_focus': (focus_persistence + goal_persistence) / 2,
             'grit_profile': self.classify_grit_level(persistence_grit_score)
         }
 
@@ -148,10 +148,7 @@ class PersistenceGritExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = goal persistence
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

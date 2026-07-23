@@ -11,7 +11,7 @@ class CareerGuidanceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -136,11 +136,11 @@ class CareerGuidanceExtension(DMITExtensionBase):
             'administrative_career': administrative_career,
             'research_career': research_career,
             'entrepreneurial_career': entrepreneurial_career,
-            'stem_careers': technical_career + analytical_career + research_career,
-            'arts_media_careers': creative_career + social_career,
-            'business_careers': leadership_career + administrative_career + entrepreneurial_career,
-            'service_careers': social_career + administrative_career,
-            'innovation_careers': creative_career + research_career + entrepreneurial_career,
+            'stem_careers': (technical_career + analytical_career + research_career) / 3,
+            'arts_media_careers': (creative_career + social_career) / 2,
+            'business_careers': (leadership_career + administrative_career + entrepreneurial_career) / 3,
+            'service_careers': (social_career + administrative_career) / 2,
+            'innovation_careers': (creative_career + research_career + entrepreneurial_career) / 3,
             'career_guidance_profile': self.classify_career_potential(primary_aptitude, career_potential_score)
         }
 
@@ -204,10 +204,7 @@ class CareerGuidanceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = analytical aptitude
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

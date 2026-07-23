@@ -152,6 +152,9 @@ class FingertipROIDetector:
         temp = binary.copy()
         kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
         
+        iterations = 0
+        max_iterations = 1000
+        
         while True:
             eroded = cv2.erode(temp, kernel)
             dilated = cv2.dilate(eroded, kernel)
@@ -159,7 +162,8 @@ class FingertipROIDetector:
             skeleton = cv2.bitwise_or(skeleton, subset)
             temp = eroded.copy()
             
-            if cv2.countNonZero(temp) == 0:
+            iterations += 1
+            if cv2.countNonZero(temp) == 0 or iterations >= max_iterations:
                 break
         
         return skeleton

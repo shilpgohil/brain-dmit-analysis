@@ -11,7 +11,7 @@ class EntrepreneurialAptitudeExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class EntrepreneurialAptitudeExtension(DMITExtensionBase):
         
         # Determine entrepreneurial aptitude style based on dominant features
         entrepreneurial_styles = {
-            'visionary_entrepreneur': business_vision + innovation_leadership,
-            'strategic_entrepreneur': strategic_thinking + market_analysis,
-            'risk_manager': risk_management + financial_acumen,
-            'networker': networking_ability + adaptability,
-            'innovator': innovation_leadership + business_vision,
+            'visionary_entrepreneur': (business_vision + innovation_leadership) / 2,
+            'strategic_entrepreneur': (strategic_thinking + market_analysis) / 2,
+            'risk_manager': (risk_management + financial_acumen) / 2,
+            'networker': (networking_ability + adaptability) / 2,
+            'innovator': (innovation_leadership + business_vision) / 2,
             'balanced_entrepreneur': (business_vision + strategic_thinking) / 2
         }
         primary_style = max(entrepreneurial_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class EntrepreneurialAptitudeExtension(DMITExtensionBase):
             'financial_acumen': financial_acumen,
             'networking_ability': networking_ability,
             'adaptability': adaptability,
-            'business_acumen': business_vision + strategic_thinking,
-            'leadership_capacity': innovation_leadership + networking_ability,
-            'analytical_skills': market_analysis + financial_acumen,
-            'risk_tolerance': risk_management + adaptability,
-            'innovation_capacity': business_vision + innovation_leadership,
+            'business_acumen': (business_vision + strategic_thinking) / 2,
+            'leadership_capacity': (innovation_leadership + networking_ability) / 2,
+            'analytical_skills': (market_analysis + financial_acumen) / 2,
+            'risk_tolerance': (risk_management + adaptability) / 2,
+            'innovation_capacity': (business_vision + innovation_leadership) / 2,
             'entrepreneurial_profile': self.classify_entrepreneurial_level(entrepreneurial_aptitude_score)
         }
 
@@ -250,10 +250,7 @@ class EntrepreneurialAptitudeExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = market analysis
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

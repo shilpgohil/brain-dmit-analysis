@@ -11,7 +11,7 @@ class LogicalMathematicalIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class LogicalMathematicalIntelligenceExtension(DMITExtensionBase):
         
         # Determine logical mathematical intelligence style based on dominant features
         logical_styles = {
-            'logical_thinker': logical_reasoning + deductive_reasoning,
-            'mathematical_mind': mathematical_thinking + computational_thinking,
-            'problem_solver': problem_solving + analytical_skills,
-            'pattern_recognizer': pattern_recognition + inductive_reasoning,
-            'analytical_thinker': analytical_skills + logical_reasoning,
+            'logical_thinker': (logical_reasoning + deductive_reasoning) / 2,
+            'mathematical_mind': (mathematical_thinking + computational_thinking) / 2,
+            'problem_solver': (problem_solving + analytical_skills) / 2,
+            'pattern_recognizer': (pattern_recognition + inductive_reasoning) / 2,
+            'analytical_thinker': (analytical_skills + logical_reasoning) / 2,
             'balanced_logical': (logical_reasoning + mathematical_thinking) / 2
         }
         primary_style = max(logical_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class LogicalMathematicalIntelligenceExtension(DMITExtensionBase):
             'deductive_reasoning': deductive_reasoning,
             'inductive_reasoning': inductive_reasoning,
             'computational_thinking': computational_thinking,
-            'logical_competence': logical_reasoning + deductive_reasoning,
-            'mathematical_ability': mathematical_thinking + computational_thinking,
-            'analytical_problem_solving': problem_solving + analytical_skills,
-            'pattern_analysis': pattern_recognition + inductive_reasoning,
-            'reasoning_capacity': logical_reasoning + inductive_reasoning,
+            'logical_competence': (logical_reasoning + deductive_reasoning) / 2,
+            'mathematical_ability': (mathematical_thinking + computational_thinking) / 2,
+            'analytical_problem_solving': (problem_solving + analytical_skills) / 2,
+            'pattern_analysis': (pattern_recognition + inductive_reasoning) / 2,
+            'reasoning_capacity': (logical_reasoning + inductive_reasoning) / 2,
             'logical_mathematical_intelligence_profile': self.classify_logical_mathematical_intelligence_level(logical_mathematical_intelligence_score)
         }
 
@@ -250,10 +250,7 @@ class LogicalMathematicalIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = analytical skills
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

@@ -11,7 +11,7 @@ class CulturalIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class CulturalIntelligenceExtension(DMITExtensionBase):
         
         # Determine cultural intelligence style based on dominant features
         cultural_styles = {
-            'awareness_focused': cultural_awareness + cultural_knowledge,
-            'sensitivity_focused': cultural_sensitivity + cultural_empathy,
-            'communication_focused': cross_cultural_communication + cultural_flexibility,
-            'adaptability_focused': cultural_adaptability + cultural_integration,
-            'empathy_focused': cultural_empathy + cultural_sensitivity,
+            'awareness_focused': (cultural_awareness + cultural_knowledge) / 2,
+            'sensitivity_focused': (cultural_sensitivity + cultural_empathy) / 2,
+            'communication_focused': (cross_cultural_communication + cultural_flexibility) / 2,
+            'adaptability_focused': (cultural_adaptability + cultural_integration) / 2,
+            'empathy_focused': (cultural_empathy + cultural_sensitivity) / 2,
             'balanced_cultural': (cultural_awareness + cultural_adaptability) / 2
         }
         primary_style = max(cultural_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class CulturalIntelligenceExtension(DMITExtensionBase):
             'cultural_empathy': cultural_empathy,
             'cultural_flexibility': cultural_flexibility,
             'cultural_integration': cultural_integration,
-            'cultural_perception': cultural_awareness + cultural_sensitivity,
-            'cultural_interaction': cross_cultural_communication + cultural_adaptability,
-            'cultural_understanding': cultural_knowledge + cultural_empathy,
-            'cultural_adaptation': cultural_flexibility + cultural_integration,
-            'cultural_competence': cultural_awareness + cross_cultural_communication,
+            'cultural_perception': (cultural_awareness + cultural_sensitivity) / 2,
+            'cultural_interaction': (cross_cultural_communication + cultural_adaptability) / 2,
+            'cultural_understanding': (cultural_knowledge + cultural_empathy) / 2,
+            'cultural_adaptation': (cultural_flexibility + cultural_integration) / 2,
+            'cultural_competence': (cultural_awareness + cross_cultural_communication) / 2,
             'cultural_intelligence_profile': self.classify_cultural_intelligence_level(cultural_intelligence_score)
         }
 
@@ -250,10 +250,7 @@ class CulturalIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = cultural knowledge
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

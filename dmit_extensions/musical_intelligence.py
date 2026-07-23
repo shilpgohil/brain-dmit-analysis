@@ -11,7 +11,7 @@ class MusicalIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class MusicalIntelligenceExtension(DMITExtensionBase):
         
         # Determine musical intelligence style based on dominant features
         musical_styles = {
-            'rhythmic_musician': rhythmic_perception + tempo_sensitivity,
-            'melodic_musician': melodic_recognition + pitch_discrimination,
-            'harmonic_musician': harmonic_understanding + musical_pattern_recognition,
-            'expressive_musician': musical_expression + musical_adaptability,
-            'pattern_musician': musical_pattern_recognition + rhythmic_perception,
+            'rhythmic_musician': (rhythmic_perception + tempo_sensitivity) / 2,
+            'melodic_musician': (melodic_recognition + pitch_discrimination) / 2,
+            'harmonic_musician': (harmonic_understanding + musical_pattern_recognition) / 2,
+            'expressive_musician': (musical_expression + musical_adaptability) / 2,
+            'pattern_musician': (musical_pattern_recognition + rhythmic_perception) / 2,
             'balanced_musician': (rhythmic_perception + melodic_recognition) / 2
         }
         primary_style = max(musical_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class MusicalIntelligenceExtension(DMITExtensionBase):
             'tempo_sensitivity': tempo_sensitivity,
             'musical_expression': musical_expression,
             'musical_adaptability': musical_adaptability,
-            'rhythmic_ability': rhythmic_perception + tempo_sensitivity,
-            'melodic_ability': melodic_recognition + pitch_discrimination,
-            'harmonic_ability': harmonic_understanding + musical_pattern_recognition,
-            'musical_creativity': musical_expression + musical_adaptability,
-            'musical_perception': rhythmic_perception + melodic_recognition,
+            'rhythmic_ability': (rhythmic_perception + tempo_sensitivity) / 2,
+            'melodic_ability': (melodic_recognition + pitch_discrimination) / 2,
+            'harmonic_ability': (harmonic_understanding + musical_pattern_recognition) / 2,
+            'musical_creativity': (musical_expression + musical_adaptability) / 2,
+            'musical_perception': (rhythmic_perception + melodic_recognition) / 2,
             'musical_intelligence_profile': self.classify_musical_intelligence_level(musical_intelligence_score)
         }
 
@@ -250,10 +250,7 @@ class MusicalIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = pitch discrimination
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

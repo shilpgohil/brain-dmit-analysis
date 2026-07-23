@@ -11,7 +11,7 @@ class LearningAgilityExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class LearningAgilityExtension(DMITExtensionBase):
         
         # Determine learning agility style based on dominant features
         agility_styles = {
-            'mental': mental_agility + agility_intelligence,
-            'people': people_agility + self_awareness_agility,
-            'change': change_agility + results_agility,
-            'results': results_agility + learning_speed,
-            'self_aware': self_awareness_agility + mental_agility,
-            'fast_learner': learning_speed + change_agility
+            'mental': (mental_agility + agility_intelligence) / 2,
+            'people': (people_agility + self_awareness_agility) / 2,
+            'change': (change_agility + results_agility) / 2,
+            'results': (results_agility + learning_speed) / 2,
+            'self_aware': (self_awareness_agility + mental_agility) / 2,
+            'fast_learner': (learning_speed + change_agility) / 2
         }
         primary_style = max(agility_styles.items(), key=lambda x: x[1])[0]
         
@@ -134,11 +134,11 @@ class LearningAgilityExtension(DMITExtensionBase):
             'learning_speed': learning_speed,
             'agility_optimization': agility_optimization,
             'agility_intelligence': agility_intelligence,
-            'cognitive_agility': mental_agility + change_agility,
-            'social_agility': people_agility + self_awareness_agility,
-            'performance_agility': results_agility + learning_speed,
-            'adaptive_agility': change_agility + agility_optimization,
-            'intelligent_agility': agility_intelligence + mental_agility,
+            'cognitive_agility': (mental_agility + change_agility) / 2,
+            'social_agility': (people_agility + self_awareness_agility) / 2,
+            'performance_agility': (results_agility + learning_speed) / 2,
+            'adaptive_agility': (change_agility + agility_optimization) / 2,
+            'intelligent_agility': (agility_intelligence + mental_agility) / 2,
             'agility_profile': self.classify_agility_level(learning_agility_score)
         }
 
@@ -202,10 +202,7 @@ class LearningAgilityExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = change agility
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

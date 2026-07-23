@@ -10,7 +10,7 @@ class NeurodivergenceExtension(DMITExtensionBase):
         # Extract comprehensive fingerprint features for neurodivergence analysis
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -52,11 +52,18 @@ class NeurodivergenceExtension(DMITExtensionBase):
         entropy_score = min(1.0, entropy / 8.0)
         fractal_score = min(1.0, fractal_complexity)
         pattern_score = 1.0 if pattern_type.lower() in ['composite', 'tented_arch'] else 0.5
-        tfrc_score = 1.0 if tfrc < 500 or tfrc > 1800 else 0.5
+        # Flag only genuinely atypical ridge counts when TFRC was measured.
+        tfrc_score = 0.5
+        if isinstance(tfrc, (int, float)) and tfrc > 0:
+            tfrc_score = 1.0 if (tfrc < 0.2 or tfrc > 0.9) else 0.5
         lacunarity_score = min(1.0, lacunarity)
         box_dim_score = (box_counting_dimension - 1.5) / 0.5 if 1.5 <= box_counting_dimension <= 2.0 else 0.5
         spectral_score = min(1.0, spectral_entropy)
-        minutiae_score = 1.0 if minutiae_density > 0.15 else 0.5
+        # FIX: the old binary threshold (> 0.15) was always true for any real
+        # print, making this component a constant 1.0. Minutiae density now
+        # arrives normalized to [0,1] (typical ~0.3-0.45); score it proportionally
+        # so atypically dense ridge-event fields raise the index gradually.
+        minutiae_score = 0.5 + 0.5 * max(0.0, min(1.0, (minutiae_density - 0.15) / 0.45))
         topological_score = min(1.0, topological_complexity)
 
         # Weighted sum for neurodivergence index

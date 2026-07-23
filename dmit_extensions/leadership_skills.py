@@ -11,7 +11,7 @@ class LeadershipSkillsExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -113,11 +113,11 @@ class LeadershipSkillsExtension(DMITExtensionBase):
         
         # Determine leadership skills style based on dominant features
         leadership_styles = {
-            'visionary_leader': visionary_leadership + strategic_thinking,
-            'team_manager': team_management + decision_making,
-            'strategic_leader': strategic_thinking + communication_leadership,
-            'conflict_resolver': conflict_resolution + adaptive_leadership,
-            'inspirational_leader': inspirational_leadership + visionary_leadership,
+            'visionary_leader': (visionary_leadership + strategic_thinking) / 2,
+            'team_manager': (team_management + decision_making) / 2,
+            'strategic_leader': (strategic_thinking + communication_leadership) / 2,
+            'conflict_resolver': (conflict_resolution + adaptive_leadership) / 2,
+            'inspirational_leader': (inspirational_leadership + visionary_leadership) / 2,
             'balanced_leader': (visionary_leadership + team_management) / 2
         }
         primary_style = max(leadership_styles.items(), key=lambda x: x[1])[0]
@@ -133,11 +133,11 @@ class LeadershipSkillsExtension(DMITExtensionBase):
             'conflict_resolution': conflict_resolution,
             'inspirational_leadership': inspirational_leadership,
             'adaptive_leadership': adaptive_leadership,
-            'leadership_effectiveness': visionary_leadership + team_management,
-            'strategic_leadership': strategic_thinking + decision_making,
-            'people_leadership': team_management + conflict_resolution,
-            'vision_communication': visionary_leadership + communication_leadership,
-            'adaptive_management': adaptive_leadership + strategic_thinking,
+            'leadership_effectiveness': (visionary_leadership + team_management) / 2,
+            'strategic_leadership': (strategic_thinking + decision_making) / 2,
+            'people_leadership': (team_management + conflict_resolution) / 2,
+            'vision_communication': (visionary_leadership + communication_leadership) / 2,
+            'adaptive_management': (adaptive_leadership + strategic_thinking) / 2,
             'leadership_skills_profile': self.classify_leadership_skills_level(leadership_skills_score)
         }
 
@@ -248,7 +248,7 @@ class LeadershipSkillsExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = communication leadership
         # Ridge count contribution
         if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
+            ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500
         else:
             ridge_score = 0.0
         # Fractal dimension contribution

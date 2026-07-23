@@ -9,7 +9,7 @@ class AttentionFocusExtension(DMITExtensionBase):
     def analyze(self, features: Dict[str, Any]) -> Dict[str, Any]:
         # Extract comprehensive fingerprint features for attention focus analysis
         # Ridge count and density features
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_density = features.get('ridge_density', 0.0)
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
@@ -112,11 +112,11 @@ class AttentionFocusExtension(DMITExtensionBase):
         
         # Determine attention focus style based on dominant features
         attention_styles = {
-            'sustained': sustained_attention + focus_quality,
-            'selective': selective_attention + attention_control,
-            'flexible': attention_flexibility + divided_attention,
-            'intense': focus_quality + attention_span,
-            'adaptive': attention_control + cognitive_load_management,
+            'sustained': (sustained_attention + focus_quality) / 2,
+            'selective': (selective_attention + attention_control) / 2,
+            'flexible': (attention_flexibility + divided_attention) / 2,
+            'intense': (focus_quality + attention_span) / 2,
+            'adaptive': (attention_control + cognitive_load_management) / 2,
             'balanced': (sustained_attention + selective_attention) / 2
         }
         primary_style = max(attention_styles.items(), key=lambda x: x[1])[0]
@@ -132,11 +132,11 @@ class AttentionFocusExtension(DMITExtensionBase):
             'attention_control': attention_control,
             'cognitive_load_management': cognitive_load_management,
             'attention_flexibility': attention_flexibility,
-            'concentration_ability': sustained_attention + focus_quality,
-            'task_switching': attention_flexibility + divided_attention,
-            'mental_endurance': attention_span + cognitive_load_management,
-            'focus_stability': attention_control + sustained_attention,
-            'attention_efficiency': selective_attention + focus_quality,
+            'concentration_ability': (sustained_attention + focus_quality) / 2,
+            'task_switching': (attention_flexibility + divided_attention) / 2,
+            'mental_endurance': (attention_span + cognitive_load_management) / 2,
+            'focus_stability': (attention_control + sustained_attention) / 2,
+            'attention_efficiency': (selective_attention + focus_quality) / 2,
             'attention_profile': self.classify_attention_level(attention_focus_score)
         }
 
@@ -225,7 +225,7 @@ class AttentionFocusExtension(DMITExtensionBase):
         
         # TFRC contribution
         if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
+            ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500
         else:
             ridge_score = 0.0
         

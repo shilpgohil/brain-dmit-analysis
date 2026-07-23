@@ -11,7 +11,7 @@ class ExecutiveFunctionExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class ExecutiveFunctionExtension(DMITExtensionBase):
         
         # Determine executive function style based on dominant features
         executive_styles = {
-            'memory_focused': working_memory + problem_solving,
-            'flexibility_focused': cognitive_flexibility + task_switching,
-            'control_focused': inhibitory_control + attention_control,
-            'planning_focused': planning + decision_making,
-            'problem_solver': problem_solving + decision_making,
+            'memory_focused': (working_memory + problem_solving) / 2,
+            'flexibility_focused': (cognitive_flexibility + task_switching) / 2,
+            'control_focused': (inhibitory_control + attention_control) / 2,
+            'planning_focused': (planning + decision_making) / 2,
+            'problem_solver': (problem_solving + decision_making) / 2,
             'balanced_executive': (working_memory + cognitive_flexibility) / 2
         }
         primary_style = max(executive_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class ExecutiveFunctionExtension(DMITExtensionBase):
             'attention_control': attention_control,
             'decision_making': decision_making,
             'task_switching': task_switching,
-            'cognitive_control': inhibitory_control + attention_control,
-            'mental_flexibility': cognitive_flexibility + task_switching,
-            'strategic_thinking': planning + problem_solving,
-            'cognitive_management': working_memory + decision_making,
-            'executive_control': inhibitory_control + planning,
+            'cognitive_control': (inhibitory_control + attention_control) / 2,
+            'mental_flexibility': (cognitive_flexibility + task_switching) / 2,
+            'strategic_thinking': (planning + problem_solving) / 2,
+            'cognitive_management': (working_memory + decision_making) / 2,
+            'executive_control': (inhibitory_control + planning) / 2,
             'executive_function_profile': self.classify_executive_function_level(executive_function_score)
         }
 
@@ -250,10 +250,7 @@ class ExecutiveFunctionExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = problem solving
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

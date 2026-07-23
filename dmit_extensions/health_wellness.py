@@ -11,7 +11,7 @@ class HealthWellnessExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class HealthWellnessExtension(DMITExtensionBase):
         
         # Determine health wellness style based on dominant features
         health_styles = {
-            'health_conscious': health_awareness + nutrition_awareness,
-            'physically_active': physical_wellness + exercise_motivation,
-            'mentally_balanced': mental_wellness + stress_management,
-            'lifestyle_optimizer': lifestyle_management + wellness_integration,
-            'wellness_integrator': wellness_integration + health_awareness,
+            'health_conscious': (health_awareness + nutrition_awareness) / 2,
+            'physically_active': (physical_wellness + exercise_motivation) / 2,
+            'mentally_balanced': (mental_wellness + stress_management) / 2,
+            'lifestyle_optimizer': (lifestyle_management + wellness_integration) / 2,
+            'wellness_integrator': (wellness_integration + health_awareness) / 2,
             'balanced_wellness': (physical_wellness + mental_wellness) / 2
         }
         primary_style = max(health_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class HealthWellnessExtension(DMITExtensionBase):
             'nutrition_awareness': nutrition_awareness,
             'exercise_motivation': exercise_motivation,
             'wellness_integration': wellness_integration,
-            'overall_wellness': physical_wellness + mental_wellness,
-            'health_management': health_awareness + lifestyle_management,
-            'stress_resilience': stress_management + mental_wellness,
-            'fitness_orientation': physical_wellness + exercise_motivation,
-            'nutrition_consciousness': nutrition_awareness + health_awareness,
+            'overall_wellness': (physical_wellness + mental_wellness) / 2,
+            'health_management': (health_awareness + lifestyle_management) / 2,
+            'stress_resilience': (stress_management + mental_wellness) / 2,
+            'fitness_orientation': (physical_wellness + exercise_motivation) / 2,
+            'nutrition_consciousness': (nutrition_awareness + health_awareness) / 2,
             'health_wellness_profile': self.classify_health_wellness_level(health_wellness_score)
         }
 
@@ -250,10 +250,7 @@ class HealthWellnessExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = stress management
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

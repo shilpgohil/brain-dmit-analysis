@@ -11,7 +11,7 @@ class MemoryLearningExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class MemoryLearningExtension(DMITExtensionBase):
         
         # Determine memory learning style based on dominant features
         memory_styles = {
-            'memory_strong': memory_capacity + recall_ability,
-            'fast_learner': learning_speed + learning_efficiency,
-            'knowledge_integrator': knowledge_integration + information_retention,
-            'adaptive_learner': adaptive_learning + memory_consolidation,
-            'retention_expert': information_retention + memory_consolidation,
+            'memory_strong': (memory_capacity + recall_ability) / 2,
+            'fast_learner': (learning_speed + learning_efficiency) / 2,
+            'knowledge_integrator': (knowledge_integration + information_retention) / 2,
+            'adaptive_learner': (adaptive_learning + memory_consolidation) / 2,
+            'retention_expert': (information_retention + memory_consolidation) / 2,
             'balanced_learner': (memory_capacity + learning_speed) / 2
         }
         primary_style = max(memory_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class MemoryLearningExtension(DMITExtensionBase):
             'learning_efficiency': learning_efficiency,
             'memory_consolidation': memory_consolidation,
             'adaptive_learning': adaptive_learning,
-            'memory_performance': memory_capacity + recall_ability,
-            'learning_effectiveness': learning_speed + learning_efficiency,
-            'knowledge_management': information_retention + knowledge_integration,
-            'memory_adaptability': adaptive_learning + memory_consolidation,
-            'cognitive_learning': memory_capacity + learning_speed,
+            'memory_performance': (memory_capacity + recall_ability) / 2,
+            'learning_effectiveness': (learning_speed + learning_efficiency) / 2,
+            'knowledge_management': (information_retention + knowledge_integration) / 2,
+            'memory_adaptability': (adaptive_learning + memory_consolidation) / 2,
+            'cognitive_learning': (memory_capacity + learning_speed) / 2,
             'memory_learning_profile': self.classify_memory_learning_level(memory_learning_score)
         }
 
@@ -250,10 +250,7 @@ class MemoryLearningExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = recall ability
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

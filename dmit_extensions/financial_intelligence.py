@@ -1,3 +1,9 @@
+# ⚠️  IMPORTANT: This extension (Financial Intelligence) is NOT a standard DMIT measure.
+# No peer-reviewed DMIT research links fingerprint patterns to Financial Intelligence.
+# Results are computed from biometric complexity metrics as a PROXY INDICATOR ONLY.
+# They should be labelled "Indicative" in any report and never used for major decisions.
+# --- DISCLAIMER END ---
+
 from typing import Dict, Any
 from .base import DMITExtensionBase
 
@@ -11,7 +17,7 @@ class FinancialIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +120,11 @@ class FinancialIntelligenceExtension(DMITExtensionBase):
         
         # Determine financial intelligence style based on dominant features
         financial_styles = {
-            'literate_investor': financial_literacy + investment_strategy,
-            'risk_manager': risk_assessment + money_management,
-            'strategic_planner': investment_strategy + financial_planning,
-            'budget_controller': budget_management + money_management,
-            'decision_maker': financial_decision_making + financial_adaptability,
+            'literate_investor': (financial_literacy + investment_strategy) / 2,
+            'risk_manager': (risk_assessment + money_management) / 2,
+            'strategic_planner': (investment_strategy + financial_planning) / 2,
+            'budget_controller': (budget_management + money_management) / 2,
+            'decision_maker': (financial_decision_making + financial_adaptability) / 2,
             'balanced_financial': (financial_literacy + budget_management) / 2
         }
         primary_style = max(financial_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +140,11 @@ class FinancialIntelligenceExtension(DMITExtensionBase):
             'money_management': money_management,
             'financial_decision_making': financial_decision_making,
             'financial_adaptability': financial_adaptability,
-            'financial_acumen': financial_literacy + investment_strategy,
-            'risk_management': risk_assessment + financial_planning,
-            'financial_control': budget_management + money_management,
-            'investment_capacity': investment_strategy + financial_decision_making,
-            'financial_stability': money_management + financial_adaptability,
+            'financial_acumen': (financial_literacy + investment_strategy) / 2,
+            'risk_management': (risk_assessment + financial_planning) / 2,
+            'financial_control': (budget_management + money_management) / 2,
+            'investment_capacity': (investment_strategy + financial_decision_making) / 2,
+            'financial_stability': (money_management + financial_adaptability) / 2,
             'financial_intelligence_profile': self.classify_financial_intelligence_level(financial_intelligence_score)
         }
 
@@ -250,10 +256,7 @@ class FinancialIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = financial planning
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

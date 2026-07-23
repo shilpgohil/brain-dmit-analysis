@@ -1,0 +1,325 @@
+@import "tailwindcss";
+
+/* ─── DMIT Cinematic Design System ─────────────────────────────────────── */
+
+:root {
+  /* Core palette */
+  --bg-void:        #020208;
+  --bg-deep:        #04040f;
+  --bg-surface:     #080818;
+  --bg-glass:       rgba(255, 255, 255, 0.03);
+  --bg-glass-hover: rgba(255, 255, 255, 0.06);
+
+  /* Borders */
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-bright:  rgba(255, 255, 255, 0.20);
+
+  /* Primary – Champagne Gold (luxury accent, replaces flat cyan) */
+  --accent-gold:     #c4a574;
+  --accent-gold-dim: rgba(196, 165, 116, 0.14);
+  --accent-champagne:#e8dcc8;
+  --accent-sage:     #6b9e8f;
+  --accent-plum:     #9d8bb5;
+  --accent-copper:   #b87d5c;
+
+  /* Legacy aliases → new palette */
+  --cyan:       var(--accent-gold);
+  --cyan-dim:   var(--accent-gold-dim);
+  --blue:       #8b9eb7;
+  --blue-glow:  rgba(139, 158, 183, 0.35);
+
+  /* Secondary – Neural Plum */
+  --violet:     var(--accent-plum);
+  --violet-glow: rgba(157, 139, 181, 0.30);
+
+  /* Accent – Warm Amber (energy, neural activity) */
+  --amber:      #f59e0b;
+  --amber-glow: rgba(245, 158, 11, 0.25);
+
+  /* Status */
+  --emerald:    #10b981;
+  --rose:       #f43f5e;
+
+  /* Text */
+  --text-primary:   #eef2ff;
+  --text-secondary: rgba(238, 242, 255, 0.50);
+  --text-muted:     rgba(238, 242, 255, 0.25);
+  --text-ghost:     rgba(238, 242, 255, 0.10);
+
+  /* Typography — serif display loaded via next/font in layout.tsx */
+  --font-display: var(--font-serif-display), 'Cormorant Garamond', Georgia, serif;
+  --font-body:    'Inter', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Motion */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out-circ: cubic-bezier(0.85, 0, 0.15, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ─── Reset & Base ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  color-scheme: dark;
+  scroll-behavior: auto; /* Lenis handles this */
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  min-height: 100%;
+}
+
+/* ─── Lenis Smooth Scroll ───────────────────────────────────────────────── */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+.lenis.lenis-smooth iframe { pointer-events: none; }
+
+/* ─── Custom Scrollbar ─────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.3); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(139, 92, 246, 0.6); }
+
+/* ─── Typography ───────────────────────────────────────────────────────── */
+.font-display { font-family: var(--font-display); }
+.font-serif-display { font-family: var(--font-serif-display), 'Cormorant Garamond', Georgia, serif; }
+.font-mono    { font-family: var(--font-mono); }
+
+/* Editorial luxury headings */
+.font-editorial {
+  font-family: var(--font-serif-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+}
+
+.text-display-hero {
+  font-family: var(--font-serif-display);
+  font-size: clamp(3.25rem, 8.5vw, 7.5rem);
+  font-weight: 300;
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+}
+
+.text-display-section {
+  font-family: var(--font-serif-display);
+  font-size: clamp(2rem, 4.5vw, 3.25rem);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.text-emphasis-italic {
+  font-family: var(--font-serif-display);
+  font-style: italic;
+  font-weight: 300;
+}
+
+/* ─── Glass Morphism ───────────────────────────────────────────────────── */
+.glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--border-subtle);
+}
+
+.glass-bright {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(24px) saturate(2);
+  -webkit-backdrop-filter: blur(24px) saturate(2);
+  border: 1px solid var(--border-default);
+}
+
+/* ─── Cinematic Glow Effects ───────────────────────────────────────────── */
+.glow-blue  { filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.5)); }
+.glow-cyan  { filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.4)); }
+.glow-violet { filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.4)); }
+
+.text-glow-cyan   { text-shadow: 0 0 20px rgba(0, 212, 255, 0.6), 0 0 40px rgba(0, 212, 255, 0.3); }
+.text-glow-blue   { text-shadow: 0 0 20px rgba(59, 130, 246, 0.6), 0 0 40px rgba(59, 130, 246, 0.3); }
+.text-glow-violet { text-shadow: 0 0 20px rgba(139, 92, 246, 0.6), 0 0 40px rgba(139, 92, 246, 0.3); }
+
+/* ─── Gradient Text ────────────────────────────────────────────────────── */
+.gradient-text-cyan-violet,
+.gradient-text-premium {
+  background: linear-gradient(135deg, #e8dcc8 0%, #c4a574 45%, #9d8bb5 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-text-blue-violet {
+  background: linear-gradient(135deg, #c4a574 0%, #9d8bb5 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-text-cyan-blue {
+  background: linear-gradient(135deg, #e8dcc8 0%, #6b9e8f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-accent-gold { color: var(--accent-gold); }
+.text-accent-sage { color: var(--accent-sage); }
+.bg-accent-gold-dim { background: var(--accent-gold-dim); }
+
+/* ─── Gradient Borders ─────────────────────────────────────────────────── */
+.border-gradient-cyan,
+.border-gradient-premium {
+  border: 1px solid transparent;
+  background: linear-gradient(var(--bg-surface), var(--bg-surface)) padding-box,
+              linear-gradient(135deg, rgba(196, 165, 116, 0.45), rgba(157, 139, 181, 0.4)) border-box;
+}
+
+/* ─── Noise / Grain Overlay ────────────────────────────────────────────── */
+.grain::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* ─── Ambient Orbs ─────────────────────────────────────────────────────── */
+.ambient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+/* ─── Animated Grid ────────────────────────────────────────────────────── */
+.grid-lines {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+.grid-lines-dense {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ─── Ridge / Scan Lines ───────────────────────────────────────────────── */
+@keyframes scanline {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(200vh); opacity: 0; }
+}
+
+.scanline {
+  position: absolute;
+  left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.5), transparent);
+  animation: scanline 4s var(--ease-out-expo) infinite;
+  pointer-events: none;
+}
+
+/* ─── Pulse Animations ─────────────────────────────────────────────────── */
+@keyframes pulse-ring {
+  0%   { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2);   opacity: 0; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-12px); }
+}
+
+@keyframes rotate-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.animate-float    { animation: float-slow 6s ease-in-out infinite; }
+.animate-rotate   { animation: rotate-slow 20s linear infinite; }
+.animate-shimmer  {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* ─── Score Orb Ring ───────────────────────────────────────────────────── */
+@keyframes dash-in {
+  from { stroke-dashoffset: 283; }
+  to   { stroke-dashoffset: var(--target-offset); }
+}
+
+/* ─── Holographic Shimmer ──────────────────────────────────────────────── */
+.holo-shimmer {
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 60%
+  );
+  background-size: 200% 200%;
+  animation: shimmer 3s linear infinite;
+}
+
+/* ─── Magnetic Hover ───────────────────────────────────────────────────── */
+.magnetic {
+  transition: transform 0.4s var(--ease-out-expo);
+  will-change: transform;
+}
+
+/* ─── Selection ────────────────────────────────────────────────────────── */
+::selection {
+  background: rgba(0, 212, 255, 0.2);
+  color: #ffffff;
+}
+
+/* ─── Focus ────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 1px solid rgba(0, 212, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* ─── Tabular ──────────────────────────────────────────────────────────── */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* ─── No scrollbar ─────────────────────────────────────────────────────── */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

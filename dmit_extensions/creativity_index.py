@@ -11,7 +11,7 @@ class CreativityIndexExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class CreativityIndexExtension(DMITExtensionBase):
         
         # Determine creativity index style based on dominant features
         creativity_styles = {
-            'divergent': divergent_thinking + creative_intelligence,
-            'fluent': creative_fluency + creative_expression,
-            'flexible': creative_flexibility + creative_elaboration,
-            'original': creative_originality + creative_problem_solving,
-            'expressive': creative_expression + creative_fluency,
-            'intelligent': creative_intelligence + divergent_thinking
+            'divergent': (divergent_thinking + creative_intelligence) / 2,
+            'fluent': (creative_fluency + creative_expression) / 2,
+            'flexible': (creative_flexibility + creative_elaboration) / 2,
+            'original': (creative_originality + creative_problem_solving) / 2,
+            'expressive': (creative_expression + creative_fluency) / 2,
+            'intelligent': (creative_intelligence + divergent_thinking) / 2
         }
         primary_style = max(creativity_styles.items(), key=lambda x: x[1])[0]
 
@@ -134,11 +134,11 @@ class CreativityIndexExtension(DMITExtensionBase):
             'creative_expression': creative_expression,
             'creative_problem_solving': creative_problem_solving,
             'creative_intelligence': creative_intelligence,
-            'creative_innovation': divergent_thinking + creative_originality,
-            'creative_flow': creative_fluency + creative_expression,
-            'creative_adaptability': creative_flexibility + creative_elaboration,
-            'creative_insight': creative_originality + creative_problem_solving,
-            'creative_mastery': creative_intelligence + creative_expression,
+            'creative_innovation': (divergent_thinking + creative_originality) / 2,
+            'creative_flow': (creative_fluency + creative_expression) / 2,
+            'creative_adaptability': (creative_flexibility + creative_elaboration) / 2,
+            'creative_insight': (creative_originality + creative_problem_solving) / 2,
+            'creative_mastery': (creative_intelligence + creative_expression) / 2,
             'creativity_profile': self.classify_creativity_level(creativity_index_score)
         }
 
@@ -202,10 +202,7 @@ class CreativityIndexExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = creative flexibility
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

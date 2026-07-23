@@ -11,7 +11,7 @@ class InterpersonalIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         
         # Pattern analysis features
         pattern_type = features.get('pattern_type', 'loop')
@@ -81,11 +81,11 @@ class InterpersonalIntelligenceExtension(DMITExtensionBase):
         
         # Determine interpersonal style based on dominant features
         interpersonal_styles = {
-            'empathetic': empathy + social_awareness,
-            'communicative': communication_skills + relationship_building,
-            'diplomatic': conflict_resolution + empathy,
-            'leadership': leadership_potential + communication_skills,
-            'collaborative': relationship_building + social_awareness
+            'empathetic': (empathy + social_awareness) / 2,
+            'communicative': (communication_skills + relationship_building) / 2,
+            'diplomatic': (conflict_resolution + empathy) / 2,
+            'leadership': (leadership_potential + communication_skills) / 2,
+            'collaborative': (relationship_building + social_awareness) / 2
         }
         primary_style = max(interpersonal_styles.items(), key=lambda x: x[1])[0]
         
@@ -98,11 +98,11 @@ class InterpersonalIntelligenceExtension(DMITExtensionBase):
             'relationship_building': relationship_building,
             'conflict_resolution': conflict_resolution,
             'leadership_potential': leadership_potential,
-            'team_collaboration': relationship_building + communication_skills,
-            'emotional_support': empathy + social_awareness,
-            'negotiation_skills': conflict_resolution + communication_skills,
-            'mentoring_ability': leadership_potential + empathy,
-            'social_networking': relationship_building + social_awareness,
+            'team_collaboration': (relationship_building + communication_skills) / 2,
+            'emotional_support': (empathy + social_awareness) / 2,
+            'negotiation_skills': (conflict_resolution + communication_skills) / 2,
+            'mentoring_ability': (leadership_potential + empathy) / 2,
+            'social_networking': (relationship_building + social_awareness) / 2,
             'interpersonal_profile': self.classify_interpersonal_level(interpersonal_intelligence_score)
         }
 
@@ -251,10 +251,7 @@ class InterpersonalIntelligenceExtension(DMITExtensionBase):
         centrality_score = min(1.0, betweenness_centrality)
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Information dimension contribution
         if 1.5 <= information_dimension <= 2.0:

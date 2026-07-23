@@ -11,7 +11,7 @@ class SocialAwarenessExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class SocialAwarenessExtension(DMITExtensionBase):
         
         # Determine social awareness style based on dominant features
         awareness_styles = {
-            'empathetic': empathy_skills + emotional_perception,
-            'understanding': social_understanding + social_intelligence,
-            'communicative': social_communication + relationship_awareness,
-            'adaptive': social_adaptability + social_monitoring,
-            'perceptive': emotional_perception + social_monitoring,
-            'intelligent': social_intelligence + social_understanding
+            'empathetic': (empathy_skills + emotional_perception) / 2,
+            'understanding': (social_understanding + social_intelligence) / 2,
+            'communicative': (social_communication + relationship_awareness) / 2,
+            'adaptive': (social_adaptability + social_monitoring) / 2,
+            'perceptive': (emotional_perception + social_monitoring) / 2,
+            'intelligent': (social_intelligence + social_understanding) / 2
         }
         primary_style = max(awareness_styles.items(), key=lambda x: x[1])[0]
 
@@ -134,11 +134,11 @@ class SocialAwarenessExtension(DMITExtensionBase):
             'social_adaptability': social_adaptability,
             'social_monitoring': social_monitoring,
             'social_intelligence': social_intelligence,
-            'emotional_sensitivity': emotional_perception + empathy_skills,
-            'social_insight': social_understanding + social_intelligence,
-            'interpersonal_awareness': relationship_awareness + social_communication,
-            'social_adaptation': social_adaptability + social_monitoring,
-            'social_perception': emotional_perception + social_monitoring,
+            'emotional_sensitivity': (emotional_perception + empathy_skills) / 2,
+            'social_insight': (social_understanding + social_intelligence) / 2,
+            'interpersonal_awareness': (relationship_awareness + social_communication) / 2,
+            'social_adaptation': (social_adaptability + social_monitoring) / 2,
+            'social_perception': (emotional_perception + social_monitoring) / 2,
             'awareness_profile': self.classify_awareness_level(social_awareness_score)
         }
 
@@ -247,10 +247,7 @@ class SocialAwarenessExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = relationship awareness
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

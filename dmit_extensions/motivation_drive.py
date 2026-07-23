@@ -11,7 +11,7 @@ class MotivationDriveExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +114,12 @@ class MotivationDriveExtension(DMITExtensionBase):
         
         # Determine motivation drive style based on dominant features
         motivation_styles = {
-            'intrinsic': intrinsic_motivation + motivation_intelligence,
-            'extrinsic': extrinsic_motivation + goal_orientation,
-            'achievement': achievement_drive + persistence_drive,
-            'goal_oriented': goal_orientation + passion_intensity,
-            'persistent': persistence_drive + motivation_optimization,
-            'passionate': passion_intensity + intrinsic_motivation
+            'intrinsic': (intrinsic_motivation + motivation_intelligence) / 2,
+            'extrinsic': (extrinsic_motivation + goal_orientation) / 2,
+            'achievement': (achievement_drive + persistence_drive) / 2,
+            'goal_oriented': (goal_orientation + passion_intensity) / 2,
+            'persistent': (persistence_drive + motivation_optimization) / 2,
+            'passionate': (passion_intensity + intrinsic_motivation) / 2
         }
         primary_style = max(motivation_styles.items(), key=lambda x: x[1])[0]
         
@@ -134,11 +134,11 @@ class MotivationDriveExtension(DMITExtensionBase):
             'passion_intensity': passion_intensity,
             'motivation_optimization': motivation_optimization,
             'motivation_intelligence': motivation_intelligence,
-            'internal_drive': intrinsic_motivation + achievement_drive,
-            'external_focus': extrinsic_motivation + goal_orientation,
-            'persistent_achievement': persistence_drive + passion_intensity,
-            'intelligent_motivation': motivation_intelligence + intrinsic_motivation,
-            'optimized_drive': motivation_optimization + persistence_drive,
+            'internal_drive': (intrinsic_motivation + achievement_drive) / 2,
+            'external_focus': (extrinsic_motivation + goal_orientation) / 2,
+            'persistent_achievement': (persistence_drive + passion_intensity) / 2,
+            'intelligent_motivation': (motivation_intelligence + intrinsic_motivation) / 2,
+            'optimized_drive': (motivation_optimization + persistence_drive) / 2,
             'motivation_profile': self.classify_motivation_level(motivation_drive_score)
         }
 
@@ -202,10 +202,7 @@ class MotivationDriveExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = achievement drive
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

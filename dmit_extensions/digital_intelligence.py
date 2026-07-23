@@ -1,3 +1,9 @@
+# ⚠️  IMPORTANT: This extension (Digital Intelligence) is NOT a standard DMIT measure.
+# No peer-reviewed DMIT research links fingerprint patterns to Digital Intelligence.
+# Results are computed from biometric complexity metrics as a PROXY INDICATOR ONLY.
+# They should be labelled "Indicative" in any report and never used for major decisions.
+# --- DISCLAIMER END ---
+
 from typing import Dict, Any
 from .base import DMITExtensionBase
 
@@ -11,7 +17,7 @@ class DigitalIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +120,11 @@ class DigitalIntelligenceExtension(DMITExtensionBase):
         
         # Determine digital intelligence style based on dominant features
         digital_styles = {
-            'digital_literate': digital_literacy + digital_learning,
-            'tech_adaptive': technology_adaptability + digital_integration,
-            'problem_solver': digital_problem_solving + digital_creativity,
-            'innovator': digital_innovation + digital_creativity,
-            'digital_communicator': digital_communication + digital_integration,
+            'digital_literate': (digital_literacy + digital_learning) / 2,
+            'tech_adaptive': (technology_adaptability + digital_integration) / 2,
+            'problem_solver': (digital_problem_solving + digital_creativity) / 2,
+            'innovator': (digital_innovation + digital_creativity) / 2,
+            'digital_communicator': (digital_communication + digital_integration) / 2,
             'balanced_digital': (digital_literacy + technology_adaptability) / 2
         }
         primary_style = max(digital_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +140,11 @@ class DigitalIntelligenceExtension(DMITExtensionBase):
             'digital_communication': digital_communication,
             'digital_creativity': digital_creativity,
             'digital_integration': digital_integration,
-            'digital_competence': digital_literacy + technology_adaptability,
-            'digital_innovation_capacity': digital_innovation + digital_creativity,
-            'digital_problem_solving_ability': digital_problem_solving + digital_learning,
-            'digital_communication_skills': digital_communication + digital_integration,
-            'digital_adaptation_capacity': technology_adaptability + digital_integration,
+            'digital_competence': (digital_literacy + technology_adaptability) / 2,
+            'digital_innovation_capacity': (digital_innovation + digital_creativity) / 2,
+            'digital_problem_solving_ability': (digital_problem_solving + digital_learning) / 2,
+            'digital_communication_skills': (digital_communication + digital_integration) / 2,
+            'digital_adaptation_capacity': (technology_adaptability + digital_integration) / 2,
             'digital_intelligence_profile': self.classify_digital_intelligence_level(digital_intelligence_score)
         }
 
@@ -250,10 +256,7 @@ class DigitalIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = digital learning
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

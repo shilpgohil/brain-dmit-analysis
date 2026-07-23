@@ -11,7 +11,7 @@ class MemoryExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -113,11 +113,11 @@ class MemoryExtension(DMITExtensionBase):
         
         # Determine memory style based on dominant features
         memory_styles = {
-            'working': working_memory + short_term_memory,
-            'long_term': long_term_memory + semantic_memory,
-            'episodic': episodic_memory + memory_retrieval,
-            'procedural': procedural_memory + memory_consolidation,
-            'semantic': semantic_memory + long_term_memory,
+            'working': (working_memory + short_term_memory) / 2,
+            'long_term': (long_term_memory + semantic_memory) / 2,
+            'episodic': (episodic_memory + memory_retrieval) / 2,
+            'procedural': (procedural_memory + memory_consolidation) / 2,
+            'semantic': (semantic_memory + long_term_memory) / 2,
             'balanced': (working_memory + long_term_memory) / 2
         }
         primary_style = max(memory_styles.items(), key=lambda x: x[1])[0]
@@ -133,11 +133,11 @@ class MemoryExtension(DMITExtensionBase):
             'procedural_memory': procedural_memory,
             'memory_consolidation': memory_consolidation,
             'memory_retrieval': memory_retrieval,
-            'immediate_recall': short_term_memory + working_memory,
-            'delayed_recall': long_term_memory + memory_retrieval,
-            'memory_stability': semantic_memory + memory_consolidation,
-            'learning_efficiency': working_memory + episodic_memory,
-            'memory_organization': semantic_memory + procedural_memory,
+            'immediate_recall': (short_term_memory + working_memory) / 2,
+            'delayed_recall': (long_term_memory + memory_retrieval) / 2,
+            'memory_stability': (semantic_memory + memory_consolidation) / 2,
+            'learning_efficiency': (working_memory + episodic_memory) / 2,
+            'memory_organization': (semantic_memory + procedural_memory) / 2,
             'memory_profile': self.classify_memory_level(memory_score)
         }
 
@@ -167,7 +167,7 @@ class MemoryExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = long-term memory
         # Ridge count contribution
         if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
+            ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500
         else:
             ridge_score = 0.0
         # Fractal dimension contribution

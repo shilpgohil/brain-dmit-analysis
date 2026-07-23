@@ -11,7 +11,7 @@ class TimeManagementExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class TimeManagementExtension(DMITExtensionBase):
         
         # Determine time management style based on dominant features
         time_styles = {
-            'prioritizer': task_prioritization + planning_ability,
-            'scheduler': schedule_management + time_discipline,
-            'efficiency_focused': time_efficiency + deadline_management,
-            'organizer': organizational_skills + adaptive_scheduling,
-            'disciplined_manager': time_discipline + deadline_management,
+            'prioritizer': (task_prioritization + planning_ability) / 2,
+            'scheduler': (schedule_management + time_discipline) / 2,
+            'efficiency_focused': (time_efficiency + deadline_management) / 2,
+            'organizer': (organizational_skills + adaptive_scheduling) / 2,
+            'disciplined_manager': (time_discipline + deadline_management) / 2,
             'balanced_manager': (task_prioritization + schedule_management) / 2
         }
         primary_style = max(time_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class TimeManagementExtension(DMITExtensionBase):
             'time_discipline': time_discipline,
             'deadline_management': deadline_management,
             'adaptive_scheduling': adaptive_scheduling,
-            'prioritization_capacity': task_prioritization + planning_ability,
-            'scheduling_capacity': schedule_management + time_discipline,
-            'efficiency_capacity': time_efficiency + deadline_management,
-            'organization_capacity': organizational_skills + adaptive_scheduling,
-            'time_effectiveness': task_prioritization + schedule_management,
+            'prioritization_capacity': (task_prioritization + planning_ability) / 2,
+            'scheduling_capacity': (schedule_management + time_discipline) / 2,
+            'efficiency_capacity': (time_efficiency + deadline_management) / 2,
+            'organization_capacity': (organizational_skills + adaptive_scheduling) / 2,
+            'time_effectiveness': (task_prioritization + schedule_management) / 2,
             'time_management_profile': self.classify_time_management_level(time_management_score)
         }
 
@@ -250,10 +250,7 @@ class TimeManagementExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = planning ability
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

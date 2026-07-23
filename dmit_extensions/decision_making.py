@@ -11,7 +11,7 @@ class DecisionMakingExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class DecisionMakingExtension(DMITExtensionBase):
         
         # Determine decision making style based on dominant features
         decision_styles = {
-            'analytical': analytical_decision_making + systematic_decision_making,
-            'intuitive': intuitive_decision_making + speed_of_decision_making,
-            'strategic': strategic_decision_making + risk_assessment,
-            'systematic': systematic_decision_making + decision_quality,
-            'adaptive': adaptability_in_decision_making + intuitive_decision_making,
+            'analytical': (analytical_decision_making + systematic_decision_making) / 2,
+            'intuitive': (intuitive_decision_making + speed_of_decision_making) / 2,
+            'strategic': (strategic_decision_making + risk_assessment) / 2,
+            'systematic': (systematic_decision_making + decision_quality) / 2,
+            'adaptive': (adaptability_in_decision_making + intuitive_decision_making) / 2,
             'balanced': (analytical_decision_making + intuitive_decision_making) / 2
         }
         primary_style = max(decision_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class DecisionMakingExtension(DMITExtensionBase):
             'decision_quality': decision_quality,
             'adaptability_in_decision_making': adaptability_in_decision_making,
             'strategic_decision_making': strategic_decision_making,
-            'logical_reasoning': analytical_decision_making + systematic_decision_making,
-            'quick_thinking': speed_of_decision_making + intuitive_decision_making,
-            'risk_management': risk_assessment + strategic_decision_making,
-            'problem_solving': decision_quality + analytical_decision_making,
-            'cognitive_flexibility': adaptability_in_decision_making + intuitive_decision_making,
+            'logical_reasoning': (analytical_decision_making + systematic_decision_making) / 2,
+            'quick_thinking': (speed_of_decision_making + intuitive_decision_making) / 2,
+            'risk_management': (risk_assessment + strategic_decision_making) / 2,
+            'problem_solving': (decision_quality + analytical_decision_making) / 2,
+            'cognitive_flexibility': (adaptability_in_decision_making + intuitive_decision_making) / 2,
             'decision_profile': self.classify_decision_level(decision_making_score)
         }
 
@@ -274,10 +274,7 @@ class DecisionMakingExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = decision quality
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

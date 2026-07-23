@@ -1,3 +1,9 @@
+# ⚠️  IMPORTANT: This extension (Sustainability Intelligence) is NOT a standard DMIT measure.
+# No peer-reviewed DMIT research links fingerprint patterns to Sustainability Intelligence.
+# Results are computed from biometric complexity metrics as a PROXY INDICATOR ONLY.
+# They should be labelled "Indicative" in any report and never used for major decisions.
+# --- DISCLAIMER END ---
+
 from typing import Dict, Any
 from .base import DMITExtensionBase
 
@@ -11,7 +17,7 @@ class SustainabilityIntelligenceExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,12 +120,12 @@ class SustainabilityIntelligenceExtension(DMITExtensionBase):
         
         # Determine sustainability intelligence style based on dominant features
         sustainability_styles = {
-            'environmental': environmental_awareness + systems_thinking,
-            'resourceful': resource_optimization + adaptive_management,
-            'long_term': long_term_thinking + sustainable_development,
-            'innovative': sustainable_innovation + resilience_planning,
-            'resilient': resilience_planning + adaptive_management,
-            'systemic': systems_thinking + environmental_awareness
+            'environmental': (environmental_awareness + systems_thinking) / 2,
+            'resourceful': (resource_optimization + adaptive_management) / 2,
+            'long_term': (long_term_thinking + sustainable_development) / 2,
+            'innovative': (sustainable_innovation + resilience_planning) / 2,
+            'resilient': (resilience_planning + adaptive_management) / 2,
+            'systemic': (systems_thinking + environmental_awareness) / 2
         }
         primary_style = max(sustainability_styles.items(), key=lambda x: x[1])[0]
         
@@ -134,11 +140,11 @@ class SustainabilityIntelligenceExtension(DMITExtensionBase):
             'adaptive_management': adaptive_management,
             'systems_thinking': systems_thinking,
             'sustainable_development': sustainable_development,
-            'ecological_intelligence': environmental_awareness + systems_thinking,
-            'resource_efficiency': resource_optimization + adaptive_management,
-            'future_orientation': long_term_thinking + sustainable_development,
-            'sustainable_creativity': sustainable_innovation + resilience_planning,
-            'resilience_intelligence': resilience_planning + adaptive_management,
+            'ecological_intelligence': (environmental_awareness + systems_thinking) / 2,
+            'resource_efficiency': (resource_optimization + adaptive_management) / 2,
+            'future_orientation': (long_term_thinking + sustainable_development) / 2,
+            'sustainable_creativity': (sustainable_innovation + resilience_planning) / 2,
+            'resilience_intelligence': (resilience_planning + adaptive_management) / 2,
             'sustainability_profile': self.classify_sustainability_level(sustainability_intelligence_score)
         }
 
@@ -202,10 +208,7 @@ class SustainabilityIntelligenceExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal complexity = long-term thinking
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:

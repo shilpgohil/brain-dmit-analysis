@@ -11,7 +11,7 @@ class InterpersonalSkillsExtension(DMITExtensionBase):
         # Ridge count and density features
         # tfrc already extracted above
         ridge_density = features.get('ridge_density', 0.0)
-        tfrc = features.get('tfrc', 0)  # Total Fingerprint Ridge Count
+        tfrc = features.get('tfrc_normalized', min(1.0, float(features.get('tfrc', 0) or 0) / 25.0))  # FIX: normalized 0-1
         ridge_continuity = features.get('ridge_continuity', 0.0)
         ridge_uniformity = features.get('ridge_uniformity', 0.0)
         ridge_thickness = features.get('mean_ridge_thickness', 0.0)
@@ -114,11 +114,11 @@ class InterpersonalSkillsExtension(DMITExtensionBase):
         
         # Determine interpersonal skills style based on dominant features
         interpersonal_styles = {
-            'communicator': communication_skills + social_intelligence,
-            'empathizer': empathy + emotional_intelligence,
-            'relationship_builder': relationship_building + team_collaboration,
-            'conflict_resolver': conflict_resolution + social_adaptability,
-            'team_player': team_collaboration + communication_skills,
+            'communicator': (communication_skills + social_intelligence) / 2,
+            'empathizer': (empathy + emotional_intelligence) / 2,
+            'relationship_builder': (relationship_building + team_collaboration) / 2,
+            'conflict_resolver': (conflict_resolution + social_adaptability) / 2,
+            'team_player': (team_collaboration + communication_skills) / 2,
             'balanced_social': (communication_skills + empathy) / 2
         }
         primary_style = max(interpersonal_styles.items(), key=lambda x: x[1])[0]
@@ -134,11 +134,11 @@ class InterpersonalSkillsExtension(DMITExtensionBase):
             'team_collaboration': team_collaboration,
             'emotional_intelligence': emotional_intelligence,
             'social_adaptability': social_adaptability,
-            'social_effectiveness': communication_skills + empathy,
-            'relationship_management': relationship_building + conflict_resolution,
-            'team_effectiveness': team_collaboration + social_intelligence,
-            'emotional_social': emotional_intelligence + social_adaptability,
-            'interpersonal_competence': communication_skills + relationship_building,
+            'social_effectiveness': (communication_skills + empathy) / 2,
+            'relationship_management': (relationship_building + conflict_resolution) / 2,
+            'team_effectiveness': (team_collaboration + social_intelligence) / 2,
+            'emotional_social': (emotional_intelligence + social_adaptability) / 2,
+            'interpersonal_competence': (communication_skills + relationship_building) / 2,
             'interpersonal_skills_profile': self.classify_interpersonal_skills_level(interpersonal_skills_score)
         }
 
@@ -250,10 +250,7 @@ class InterpersonalSkillsExtension(DMITExtensionBase):
         # DMIT research shows: High ridge count + fractal dimension = conflict resolution
         
         # Ridge count contribution
-        if tfrc > 0:
-            ridge_score = min(1.0, tfrc / 1500.0)
-        else:
-            ridge_score = min(1.0, tfrc / 1500.0) if tfrc > 0 else 0.0
+        ridge_score = min(1.0, float(tfrc or 0))  # FIX: per-finger TFRC 0-30, not 0-1500  # FIX: per-finger TFRC 0-30
         
         # Fractal dimension contribution
         if 1.5 <= box_counting_dimension <= 2.0:
