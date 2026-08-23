@@ -53,3 +53,10 @@ extras/zenith-ai/
 # Large client files — never commit to version control
 "clients idea"/
 clients idea/
+
+# Internal planning, AI memory, and dev-only docs — not for version control
+memory-bank/
+docs/
+samples/
+PLAN.md
+*.plan.md
