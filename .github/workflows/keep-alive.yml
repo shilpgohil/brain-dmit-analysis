@@ -17,8 +17,8 @@ name: Keep Render backend awake
 # test it from the GitHub Actions tab without waiting for the cron.
 
 on:
-  schedule:
-    - cron: "*/10 * * * *"   # every 10 minutes, 24 × 7
+  # DISABLED: schedule:
+  #   - cron: "*/10 * * * *"   # every 10 minutes, 24 × 7
   workflow_dispatch: {}       # manual trigger from GitHub Actions UI
 
 jobs:
