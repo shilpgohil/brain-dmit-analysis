@@ -7,10 +7,16 @@ import { GOLD, PLUM, scoreToGoldTier } from "@/lib/analysis-theme";
 import { mediaUrl } from "@/lib/api";
 
 const RANGE_LABEL: Record<string, string> = {
-  "<=35": "≤ 35° — fast, sensitive, nimble",
-  "36-40": "36–40° — optimal fine-motor control",
-  "41-45": "41–45° — needs staged repetition",
-  "45+": "45°+ — slower, gross-motor oriented",
+  "<35":   "< 35° — below normal, hypersensitive",
+  "35-40": "35–40° — normal-fast, optimal control",
+  "41-46": "41–46° — normal average, structured learning",
+  "47-55": "47–55° — above normal, needs repetition",
+  ">55":   "> 55° — well above normal, high structure needed",
+  // legacy labels for older sessions
+  "<=35":  "≤ 35° — below normal, hypersensitive",
+  "36-40": "36–40° — normal-fast, optimal control",
+  "41-45": "41–45° — normal average",
+  "45+":   "45°+ — above normal, needs repetition",
 };
 
 function HandCard({ side, hand, hemisphere }: { side: string; hand: AtdHand; hemisphere: string }) {
@@ -89,6 +95,27 @@ export function AtdPanel({
           {/* Right palm -> left hemisphere; left palm -> right hemisphere (cross-lateral) */}
           {atd!.right_hand && <HandCard side="Right" hand={atd!.right_hand} hemisphere="Left" />}
           {atd!.left_hand && <HandCard side="Left" hand={atd!.left_hand} hemisphere="Right" />}
+
+          {/* Bilateral asymmetry indicator */}
+          {atd!.left_hand && atd!.right_hand && (() => {
+            const diff = Math.abs(atd!.left_hand!.angle_deg - atd!.right_hand!.angle_deg);
+            if (diff < 2) return null;
+            const dominant = atd!.right_hand!.angle_deg < atd!.left_hand!.angle_deg ? "Left" : "Right";
+            const severity = diff >= 8 ? "Notable" : "Mild";
+            const color = diff >= 8 ? "#f59e0b" : "rgba(255,255,255,0.35)";
+            return (
+              <div className="px-3 py-2 rounded-lg" style={{ background: "rgba(245,158,11,0.06)", border: `1px solid ${color}30` }}>
+                <p className="text-[9px] font-mono uppercase tracking-widest mb-1" style={{ color }}>
+                  {severity} bilateral asymmetry · {diff.toFixed(1)}° difference
+                </p>
+                <p className="text-[10px] text-white/40">
+                  {dominant} hemisphere processes new information faster.
+                  {diff >= 8 ? " Worth highlighting in counselling." : ""}
+                </p>
+              </div>
+            );
+          })()}
+
           {atd!.summary && <p className="text-[10px] text-white/30 leading-relaxed">{atd!.summary}</p>}
           <p className="text-[9px] text-white/20 leading-relaxed">
             Geometric estimates approximate atd from hand landmarks, not ridge triradii. A ridge-grade

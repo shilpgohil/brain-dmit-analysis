@@ -671,12 +671,37 @@ class IntegratedDMITPipeline:
 
         analysis: Dict[str, Any] = {'left_hand': left, 'right_hand': right}
         summary_parts = []
+
+        # ── Per-hand summary ──────────────────────────────────────────────────
         if right is not None:
-            summary_parts.append(f"Right hand atd {right['angle_deg']} deg (left hemisphere speed): {right['range_category']}.")
+            summary_parts.append(
+                f"Right palm ATD {right['angle_deg']}° → left-hemisphere processing "
+                f"speed: {right['range_category']} range ({right['learning_speed']:.0%})."
+            )
         if left is not None:
-            summary_parts.append(f"Left hand atd {left['angle_deg']} deg (right hemisphere speed): {left['range_category']}.")
+            summary_parts.append(
+                f"Left palm ATD {left['angle_deg']}° → right-hemisphere processing "
+                f"speed: {left['range_category']} range ({left['learning_speed']:.0%})."
+            )
+
+        # ── Bilateral asymmetry check ─────────────────────────────────────────
+        if left is not None and right is not None:
+            diff = abs(left['angle_deg'] - right['angle_deg'])
+            if diff >= 8.0:
+                dominant = "left" if right['angle_deg'] < left['angle_deg'] else "right"
+                summary_parts.append(
+                    f"Notable bilateral asymmetry: {diff:.1f}° difference between hands. "
+                    f"The {dominant} hemisphere processes new information more quickly."
+                )
+
+        # ── Method disclaimer ─────────────────────────────────────────────────
         if any(h and h.get('method') == 'geometric_landmark_estimate' for h in (left, right)):
-            summary_parts.append("Angles are geometric landmark estimates from palm images, not ridge-triradius measurements.")
+            summary_parts.append(
+                "Note: angles are geometric landmark estimates from palm photographs, "
+                "not ridge-triradius measurements. A ridge-grade palm scan is required "
+                "for a clinical-standard ATD reading."
+            )
+
         analysis['summary'] = " ".join(summary_parts) if summary_parts else None
         return analysis
 

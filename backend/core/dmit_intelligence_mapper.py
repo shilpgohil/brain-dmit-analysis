@@ -287,15 +287,21 @@ def _map_personality(features: Dict[str, float]) -> Dict[str, Optional[float]]:
     return pb
 
 
-ATD_RANGES = (
-    (35.0, "<=35"),
-    (40.0, "36-40"),
-    (45.0, "41-45"),
-    (float('inf'), "45+"),
-)
-
-
 def map_atd_angle(angle_deg: Optional[float]) -> Optional[Dict[str, Any]]:
+    """
+    Map a measured ATD angle (degrees) to DMIT interpretation fields.
+
+    ATD angle categories (Cummins-Midlo / mainstream DMIT practitioners):
+      < 35°  — below normal range; hypersensitive, very fast but over-responsive
+      35-40° — normal-fast; optimal coordination and fine-motor control
+      41-46° — normal-average; effective learning with structured approach
+      47-55° — above normal; benefits from repetition and staged teaching
+      > 55°  — well above normal; needs high structure, extra patience
+
+    Normal population median: approximately 38-42°.
+    Angles below 35° or above 55° are outside the typical range and warrant
+    additional context in counselling.
+    """
     if angle_deg is None:
         return None
     try:
@@ -305,48 +311,61 @@ def map_atd_angle(angle_deg: Optional[float]) -> Optional[Dict[str, Any]]:
     if angle <= 0:
         return None
 
-    if angle <= 35.0:
-        category = "<=35"
-        learning_speed = 0.95
-        fine_motor = 0.95
+    if angle < 35.0:
+        category = "<35"
+        learning_speed = 0.88
+        fine_motor = 0.90
         sensory = 0.95
         interpretation = (
-            "Strong observation and nimble physical control. Masters new techniques quickly "
-            "with high comprehension, though emotionally sensitive to the surrounding environment."
+            "Below the typical normal range. Very high sensory sensitivity and rapid reflexes; "
+            "learns extremely quickly but may be over-reactive to environmental stimuli. "
+            "Emotional regulation and focused attention may need nurturing."
         )
     elif angle <= 40.0:
-        category = "36-40"
-        learning_speed = 0.8
+        category = "35-40"
+        learning_speed = 0.82
         fine_motor = 0.85
-        sensory = 0.8
+        sensory = 0.80
         interpretation = (
-            "Normal optimal range. Stable, accurate data gathering with strong fine-muscle "
-            "coordination and high perception toward learning."
+            "Normal optimal range. Stable, accurate data gathering with strong fine-motor "
+            "coordination and high perception toward learning. Well-balanced processing speed."
         )
-    elif angle <= 45.0:
-        category = "41-45"
-        learning_speed = 0.55
-        fine_motor = 0.55
-        sensory = 0.55
+    elif angle <= 46.0:
+        category = "41-46"
+        learning_speed = 0.60
+        fine_motor = 0.60
+        sensory = 0.58
         interpretation = (
-            "Benefits from step-by-step repeated training while mastering a new technique. "
-            "Performance is stable but slower; learning motivation should be reinforced."
+            "Normal average range. Effective learner who benefits from a structured, "
+            "step-by-step approach. Performance is consistent; positive reinforcement "
+            "and clear instructions accelerate progress."
+        )
+    elif angle <= 55.0:
+        category = "47-55"
+        learning_speed = 0.35
+        fine_motor = 0.35
+        sensory = 0.40
+        interpretation = (
+            "Above the typical range. Processes information more slowly; needs repeated "
+            "practice and patient, staged teaching. Gross-motor activities are more natural "
+            "than fine-motor tasks. Visual aids and hands-on practice are highly effective."
         )
     else:
-        category = "45+"
-        learning_speed = 0.3
-        fine_motor = 0.3
-        sensory = 0.4
+        category = ">55"
+        learning_speed = 0.18
+        fine_motor = 0.18
+        sensory = 0.28
         interpretation = (
-            "Slower information processing and response; needs more time and staged teaching. "
-            "Stronger at gross-muscle actions than delicate fine-motor work."
+            "Well above the typical range. Requires highly structured, repetitive instruction "
+            "with ample time for consolidation. Gross-motor strengths should be emphasised. "
+            "Early intervention with a skilled educator significantly improves outcomes."
         )
 
-    if angle < 38.0:
-        fine_motor = min(1.0, fine_motor + 0.05)
-        sensory = min(1.0, sensory + 0.05)
-    if angle > 42.0:
-        fine_motor = max(0.0, fine_motor - 0.05)
+    # Fine-tune at extremes within the same band
+    if angle < 33.0:
+        sensory = min(1.0, sensory + 0.05)   # hyper-sensitive end
+    if angle > 50.0:
+        fine_motor = max(0.0, fine_motor - 0.05)  # gross-motor dominance increases
 
     return {
         'angle_deg': round(angle, 1),
