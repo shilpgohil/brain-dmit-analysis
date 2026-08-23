@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { listSessions, deleteSession, reportDownloadUrl } from "@/lib/api";
+import { listSessions, deleteSession, downloadReport } from "@/lib/api";
 import type { SessionListItem } from "@/lib/types";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { MagneticButton } from "@/components/ui/MagneticButton";
 import { FingerprintField } from "@/components/effects/FingerprintField";
 import { relativeTime } from "@/lib/utils";
 import { Fingerprint, Plus, Trash2, Download, RefreshCw, ChevronRight, AlertCircle, GitCompare } from "lucide-react";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { Loader2 } from "lucide-react";
 
 const STATUS_COLOR: Record<string, string> = {
   completed: "#10b981",
@@ -23,10 +25,12 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function SessionsPage() {
+  const { user, isLoading } = useAuthGuard("partner");
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -40,7 +44,7 @@ export default function SessionsPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (user) load(); }, [user]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this session?")) return;
@@ -55,8 +59,27 @@ export default function SessionsPage() {
     }
   };
 
+  const handleDownload = async (id: string, subjectName?: string | null) => {
+    setDownloadingId(id);
+    try {
+      await downloadReport(id, subjectName);
+    } catch {
+      alert("Report download failed. Please try again.");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const completed = sessions.filter((s) => s.status === "completed").length;
   const inProgress = sessions.filter((s) => !["completed", "failed", "pending"].includes(s.status)).length;
+
+  if (isLoading || !user) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-7 h-7 animate-spin text-[#c4a574]" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-24">
@@ -69,7 +92,7 @@ export default function SessionsPage() {
           style={{ background: "linear-gradient(to bottom, transparent, rgba(2,2,8,0.9))" }} />
         <div className="relative z-10 max-w-5xl mx-auto">
           <motion.div
-            className="flex items-end justify-between"
+            className="flex flex-col sm:flex-row sm:items-end justify-between gap-4"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
@@ -178,22 +201,30 @@ export default function SessionsPage() {
                     >
                       {session.status}
                     </span>
+                    {session.has_report && (
+                      <span className="text-[8px] font-mono uppercase tracking-wide px-2 py-1 rounded-full flex-shrink-0 hidden sm:inline"
+                        style={{ color: "#10b981", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)" }}>
+                        Report Ready
+                      </span>
+                    )}
 
                     {/* Actions */}
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {session.has_report && (
-                        <a
-                          href={reportDownloadUrl(session.id)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
+                        <button
+                          type="button"
+                          title="Download report"
+                          disabled={downloadingId === session.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(session.id, session.subject_name);
+                          }}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-[#00d4ff] hover:bg-[#00d4ff10] transition-all disabled:opacity-40"
                         >
-                          <button
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-[#00d4ff] hover:bg-[#00d4ff10] transition-all"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-                        </a>
+                          {downloadingId === session.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Download className="w-3.5 h-3.5" />}
+                        </button>
                       )}
                       <Link href={`/analysis/${session.id}`}>
                         <button className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-white/60 transition-all group-hover:translate-x-0.5">

@@ -116,7 +116,22 @@ export interface CareerMatch {
   category: string;
   match_score: number;
   key_strengths: string[];
+  family?: string;
 }
+
+export type QuotientKey = "IQ" | "EQ" | "CQ" | "AQ" | "SQ" | "PQ" | "LQ" | "MQ" | "FQ" | "DQ";
+export const QUOTIENT_LABELS: Record<QuotientKey, string> = {
+  IQ: "Intelligence Quotient",
+  EQ: "Emotional Quotient",
+  CQ: "Creativity Quotient",
+  AQ: "Adaptability Quotient",
+  SQ: "Social Quotient",
+  PQ: "Physical Quotient",
+  LQ: "Leadership Quotient",
+  MQ: "Motivation Quotient",
+  FQ: "Focus Quotient",
+  DQ: "Decision Quotient",
+};
 
 export interface PipelineStage {
   id: string;
@@ -153,6 +168,7 @@ export interface AnalysisResult {
   palms?: PalmCapture[];
   extensions: ExtensionResult[];
   career_matches: CareerMatch[];
+  quotients?: Record<string, number> | null;
   pipeline_stages: PipelineStage[];
   report_url?: string;
   processing_time_ms?: number;

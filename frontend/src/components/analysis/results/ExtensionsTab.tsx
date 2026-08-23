@@ -12,9 +12,9 @@ import {
   Cell,
 } from "recharts";
 import type { ExtensionResult } from "@/lib/types";
-import { GOLD, scoreToGoldTier } from "@/lib/analysis-theme";
+import { GOLD, scoreToGoldTier, chartTooltipStyle, chartCursorStyle } from "@/lib/analysis-theme";
 import { cn } from "@/lib/utils";
-import { Search, Sparkles, ChevronDown } from "lucide-react";
+import { Search, Sparkles, ChevronDown, X } from "lucide-react";
 
 const PLUM = "#9d8bb5";
 const SAGE = "#6b9e8f";
@@ -177,6 +177,45 @@ function ExtensionDetailCard({
                   </motion.div>
                 ))}
               </motion.div>
+
+              {/* Description */}
+              {ext.description && (
+                <motion.div
+                  className="mt-3 pt-3 border-t border-white/[0.05]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.15 }}
+                >
+                  <p className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-1">About</p>
+                  <p className="text-[10px] text-white/40 leading-relaxed">{ext.description}</p>
+                </motion.div>
+              )}
+
+              {/* Recommendations */}
+              {ext.recommendations && ext.recommendations.length > 0 && (
+                <motion.div
+                  className="mt-3 pt-3 border-t border-white/[0.05]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <p className="text-[9px] font-mono uppercase tracking-widest mb-2"
+                    style={{ color: accent }}>
+                    Development Tips
+                  </p>
+                  <ul className="space-y-1.5">
+                    {ext.recommendations.slice(0, 3).map((rec, i) => (
+                      <li key={i} className="flex items-start gap-2 text-[10px] text-white/45 leading-snug">
+                        <span className="flex-shrink-0 mt-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center"
+                          style={{ background: `${accent}20`, color: accent, fontSize: 7, fontWeight: 700 }}>
+                          {i + 1}
+                        </span>
+                        {rec}
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -296,12 +335,9 @@ export function ExtensionsTab({ extensions }: { extensions: ExtensionResult[] })
                   tickLine={false}
                 />
                 <Tooltip
-                  contentStyle={{
-                    background: "rgba(8,8,20,0.95)",
-                    border: `1px solid ${GOLD.border}`,
-                    borderRadius: 8,
-                    fontSize: 11,
-                  }}
+                  {...chartTooltipStyle}
+                  contentStyle={{ ...chartTooltipStyle.contentStyle, fontSize: 11 }}
+                  cursor={chartCursorStyle}
                   formatter={(v, _, item) => [
                     `${v}% avg · ${(item as { payload?: { count?: number } }).payload?.count ?? 0} modules`,
                     "",
@@ -328,14 +364,30 @@ export function ExtensionsTab({ extensions }: { extensions: ExtensionResult[] })
           className="relative flex-1 max-w-xs"
           whileFocus={{ scale: 1.01 }}
         >
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25 pointer-events-none" />
           <input
-            type="search"
+            // `type="search"` triggers the browser's native "searchfield"
+            // appearance in Chrome/WebKit, which overrides most custom
+            // width/padding/background styling and collapses the field to
+            // a tiny native control with hard-to-see text. Plain `text`
+            // (with `appearance-none` as a belt-and-suspenders reset, plus
+            // our own clear button below) renders exactly as styled.
+            type="text"
             placeholder="Search extensions..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-xl text-xs bg-white/[0.03] border border-white/[0.08] text-white/80 placeholder:text-white/20 focus:outline-none focus:border-[#c4a57450]"
+            className="w-full h-9 pl-9 pr-8 rounded-xl text-xs leading-none appearance-none bg-white/[0.05] border border-white/[0.1] text-white placeholder:text-white/30 focus:outline-none focus:border-[#c4a57480] focus:bg-white/[0.07]"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              aria-label="Clear search"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </motion.div>
         <motion.div className="flex flex-wrap gap-1.5">
           {categories.map((cat) => (

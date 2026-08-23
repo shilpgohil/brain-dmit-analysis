@@ -18,7 +18,7 @@ import { BrainLobeDiagram } from "@/components/visualization/BrainLobeDiagram";
 import { PipelineTracker } from "@/components/analysis/PipelineTracker";
 import { MetricStrip } from "./MetricStrip";
 import { AtdPanel } from "./AtdPanel";
-import { GOLD, PLUM, SAGE, scoreToGoldTier } from "@/lib/analysis-theme";
+import { GOLD, PLUM, SAGE, scoreToGoldTier, chartTooltipStyle, chartCursorStyle } from "@/lib/analysis-theme";
 import { lobeLabel, measuredEntries, isMeasured, pct } from "@/lib/utils";
 
 const MI_LABELS: Record<string, string> = {
@@ -220,12 +220,9 @@ export function OverviewTab({ result }: { result: AnalysisResult }) {
                         <XAxis dataKey="name" tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 9 }} axisLine={false} tickLine={false} />
                         <YAxis domain={[0, 100]} hide />
                         <Tooltip
-                          contentStyle={{
-                            background: "rgba(8,8,20,0.95)",
-                            border: `1px solid ${GOLD.border}`,
-                            borderRadius: 8,
-                            fontSize: 11,
-                          }}
+                          {...chartTooltipStyle}
+                          contentStyle={{ ...chartTooltipStyle.contentStyle, fontSize: 11 }}
+                          cursor={chartCursorStyle}
                           formatter={(v) => [`${v}%`, "Capacity"]}
                         />
                         <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={28}>
@@ -358,11 +355,7 @@ export function OverviewTab({ result }: { result: AnalysisResult }) {
                       ))}
                     </Pie>
                     <Tooltip
-                      contentStyle={{
-                        background: "rgba(8,8,20,0.95)",
-                        border: `1px solid ${GOLD.border}`,
-                        borderRadius: 8,
-                      }}
+                      {...chartTooltipStyle}
                       formatter={(v) => [`${v}%`, ""]}
                     />
                   </PieChart>

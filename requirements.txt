@@ -1,15 +1,7 @@
-numpy
-opencv-python
-tensorflow
-keras
-scipy
-matplotlib
-reportlab
-pytest
-pydot
-graphviz
-Pillow
-fastapi>=0.110.0
-uvicorn[standard]>=0.27.0
-python-multipart>=0.0.9
-pydantic>=2.0.0
+# Root requirements.txt — points to the backend package list.
+# Install all backend dependencies with:
+#   pip install -r backend/requirements.txt
+#
+# For development (tests, scripts):
+#   pip install -r backend/requirements.txt pytest
+-r backend/requirements.txt

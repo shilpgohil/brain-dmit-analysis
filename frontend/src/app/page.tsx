@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { motion, useScroll, useTransform, useSpring } from "framer-motion";
 import { listSessions, getHealth } from "@/lib/api";
+import { useAuthStore } from "@/store/authStore";
 import type { SessionListItem, SystemStatus } from "@/lib/types";
 import { FingerprintField } from "@/components/effects/FingerprintField";
 import { ParticleField } from "@/components/effects/ParticleField";
@@ -45,17 +46,22 @@ export default function LandingPage() {
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [health, setHealth] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuthStore();
 
   useEffect(() => {
-    Promise.all([
-      listSessions(6).catch(() => []),
-      getHealth().catch(() => null),
-    ]).then(([s, h]) => {
-      setSessions(s);
-      setHealth(h);
+    const p: Promise<unknown>[] = [getHealth().catch(() => null)];
+    // Only fetch sessions if logged in (requires auth token)
+    if (user) p.unshift(listSessions(6).catch(() => []));
+    Promise.all(p).then(([...results]) => {
+      if (user) {
+        setSessions(results[0] as SessionListItem[]);
+        setHealth(results[1] as SystemStatus | null);
+      } else {
+        setHealth(results[0] as SystemStatus | null);
+      }
       setLoading(false);
     });
-  }, []);
+  }, [user]);
 
   const completed = sessions.filter((s) => s.status === "completed").length;
 
@@ -127,7 +133,7 @@ export default function LandingPage() {
           </RevealBlock>
 
           {/* CTAs */}
-          <RevealBlock delay={0.7} className="flex items-center justify-center gap-4">
+          <RevealBlock delay={0.7} className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
             <Link href="/analysis/new">
               <MagneticButton size="lg" icon={<Fingerprint className="w-4 h-4" />}>
                 Begin Analysis
@@ -141,14 +147,18 @@ export default function LandingPage() {
           </RevealBlock>
 
           {/* Stats */}
-          <RevealBlock delay={0.9} className="mt-14 flex items-center justify-center gap-8">
+          <RevealBlock delay={0.9} className="mt-10 sm:mt-14 flex flex-wrap items-center justify-center gap-x-6 gap-y-4 sm:gap-8">
             <Stat value="85" label="Features Extracted" />
-            <div className="w-px h-8 bg-white/[0.08]" />
+            <div className="w-px h-8 bg-white/[0.08] hidden sm:block" />
             <Stat value="9" label="Intelligence Types" />
-            <div className="w-px h-8 bg-white/[0.08]" />
+            <div className="w-px h-8 bg-white/[0.08] hidden sm:block" />
             <Stat value="46" label="Extension Modules" />
-            <div className="w-px h-8 bg-white/[0.08]" />
-            <Stat value={String(sessions.length)} label="Sessions" dynamic />
+            {user && sessions.length > 0 && (
+              <>
+                <div className="w-px h-8 bg-white/[0.08] hidden sm:block" />
+                <Stat value={String(sessions.length)} label="Sessions" dynamic />
+              </>
+            )}
           </RevealBlock>
         </motion.div>
 
@@ -270,7 +280,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* â”€â”€ RECENT SESSIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {user && (
       <section className="py-24 px-6 relative">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-end justify-between mb-10">
@@ -319,6 +329,7 @@ export default function LandingPage() {
           )}
         </div>
       </section>
+      )}
 
       {/* â”€â”€ CTA SECTION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <section className="py-32 px-6 relative overflow-hidden">
@@ -352,7 +363,7 @@ export default function LandingPage() {
 
       {/* â”€â”€ Footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <footer className="border-t border-white/[0.05] py-8 px-6">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Fingerprint className="w-4 h-4 text-accent-gold/50" />
             <span className="text-[11px] text-white/20 font-mono tracking-widest uppercase">

@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: dmit-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    # Neon + R2 env vars must be set in the Render dashboard (sync: false).
+    # See full_system_deployment plan for where to obtain each value.
+    envVars:
+      # ── Database (Neon PostgreSQL) ─────────────────────────────────────
+      - key: DATABASE_URL
+        sync: false       # Neon project → Connection string (pooled)
+
+      # ── File storage (Cloudflare R2) ───────────────────────────────────
+      - key: CF_ACCOUNT_ID
+        sync: false       # Cloudflare dashboard → right sidebar
+      - key: R2_ACCESS_KEY
+        sync: false       # R2 → Manage API tokens → Access Key ID
+      - key: R2_SECRET_KEY
+        sync: false       # R2 → Manage API tokens → Secret Access Key
+      - key: R2_BUCKET
+        value: dmit-files
+      - key: R2_PUBLIC_URL
+        sync: false       # R2 bucket → Settings → Public Access URL
+
+      # ── Auth ───────────────────────────────────────────────────────────
+      - key: ADMIN_EMAIL
+        value: admin@dmit.local
+      - key: ADMIN_PASSWORD
+        sync: false       # Strong password for the seeded admin account
+      - key: JWT_SECRET
+        sync: false       # openssl rand -hex 32
+
+      # ── AI providers ───────────────────────────────────────────────────
+      - key: GROQ_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+
+      # ── CORS ───────────────────────────────────────────────────────────
+      # Set CORS_ORIGINS to your Vercel URL after deploying the frontend,
+      # e.g.: https://your-app.vercel.app
+      # Multiple origins: comma-separated string.
+      - key: CORS_ORIGINS
+        sync: false
+
+      # Mark as production so cookies use Secure + SameSite=None
+      - key: ENVIRONMENT
+        value: production

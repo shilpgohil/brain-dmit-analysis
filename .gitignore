@@ -40,6 +40,16 @@ out/
 
 # Runtime data / logs
 data/*.db
+data/*.db-shm
+data/*.db-wal
 *.log
 frontend/next_boot.log
 uvicorn_boot.log
+
+# Extras — reference projects, not part of this repo
+extras/Arogya/
+extras/zenith-ai/
+
+# Large client files — never commit to version control
+"clients idea"/
+clients idea/

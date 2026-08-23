@@ -5,6 +5,8 @@ import { CinematicNav } from "@/components/layout/CinematicNav";
 import { AmbientOrbs } from "@/components/effects/AmbientOrbs";
 import { CursorGlow } from "@/components/effects/CursorGlow";
 import { SmoothScroll } from "@/components/layout/SmoothScroll";
+import { AuthBootstrap } from "@/components/layout/AuthBootstrap";
+import { MainContent } from "@/components/layout/MainContent";
 
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
@@ -48,13 +50,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* Custom cursor */}
           <CursorGlow />
 
+          {/* Auth boot-refresh — silently restores session from httpOnly refresh cookie */}
+          <AuthBootstrap />
+
           {/* Navigation */}
           <CinematicNav />
 
           {/* Page content */}
-          <main className="relative z-10 pt-14">
-            {children}
-          </main>
+          <MainContent>{children}</MainContent>
         </SmoothScroll>
       </body>
     </html>

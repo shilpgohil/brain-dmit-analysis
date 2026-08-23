@@ -18,3 +18,38 @@ export function scoreToGoldTier(value: number): { color: string; label: string }
   if (value >= 0.35) return { color: "#b87d5c", label: "Moderate" };
   return { color: "rgba(238,242,255,0.35)", label: "Emerging" };
 }
+
+/**
+ * Shared Recharts `<Tooltip>` props for every chart on the dark theme.
+ *
+ * Recharts' `DefaultTooltipContent` hardcodes `itemStyle.color: '#000'` and
+ * only reads `contentStyle.color` for the wrapper div — never for the
+ * item/label text itself — so every chart that set only `contentStyle`
+ * rendered near-invisible black text on this dark background. Spreading
+ * `chartTooltipStyle` fixes that everywhere at once.
+ */
+export const chartTooltipStyle = {
+  contentStyle: {
+    background: "rgba(8,8,20,0.95)",
+    border: `1px solid ${GOLD.border}`,
+    borderRadius: 8,
+  },
+  itemStyle: {
+    color: GOLD.bright,
+  },
+  labelStyle: {
+    color: "rgba(255,255,255,0.55)",
+  },
+} as const;
+
+/**
+ * Shared Recharts `<Tooltip cursor={...}>` prop. Recharts defaults the bar
+ * hover/active "cursor" band to a flat `fill: '#ccc'` (light gray), which
+ * on this dark UI reads as a jarring bright/white rectangle around the bar
+ * being pointed at. A faint, colour-matched highlight looks intentional
+ * instead.
+ */
+export const chartCursorStyle = {
+  fill: "rgba(196, 165, 116, 0.08)",
+  stroke: "none",
+} as const;

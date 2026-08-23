@@ -15,11 +15,12 @@ import {
   PolarAngleAxis,
   Radar,
 } from "recharts";
-import type { AnalysisResult } from "@/lib/types";
+import type { AnalysisResult, QuotientKey } from "@/lib/types";
+import { QUOTIENT_LABELS } from "@/lib/types";
 import { deriveCareerMatches, getCareerGuidanceExtension } from "@/lib/derive-careers";
 import { measuredEntries } from "@/lib/utils";
-import { GOLD, PLUM, scoreToGoldTier } from "@/lib/analysis-theme";
-import { Briefcase, Target, TrendingUp, Compass } from "lucide-react";
+import { GOLD, PLUM, scoreToGoldTier, chartTooltipStyle, chartCursorStyle } from "@/lib/analysis-theme";
+import { Briefcase, Target, TrendingUp, Compass, Award } from "lucide-react";
 
 const CLUSTER_ICONS: Record<string, typeof Briefcase> = {
   Career: Briefcase,
@@ -123,9 +124,21 @@ export function CareerTab({ result }: { result: AnalysisResult }) {
               <p className="text-sm text-white/40 mt-4 leading-relaxed max-w-md">{profile}</p>
             )}
             <motion.p className="text-xs text-white/25 mt-4 leading-relaxed">
-              Derived from dermatoglyphic ridge complexity, fractal dimension, and aggregated
-              multiple-intelligence mapping across all submitted fingerprints.
+              Matched via a 10-quotient biometric profile — IQ, EQ, CQ, AQ, SQ, PQ, LQ, MQ, FQ and DQ
+              computed from your fingerprint ridge patterns, extension scores, and MI analysis.
             </motion.p>
+            {/* Key strengths for primary match */}
+            {primary.key_strengths && primary.key_strengths.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-4">
+                <span className="text-[9px] text-white/25 uppercase tracking-widest font-mono self-center">Why:</span>
+                {primary.key_strengths.map((s) => (
+                  <span key={s} className="text-[9px] px-2 py-0.5 rounded-full font-mono"
+                    style={{ background: GOLD.dim, color: GOLD.bright, border: `1px solid ${GOLD.border}` }}>
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
           </motion.div>
 
           {radarFromMi.length > 0 && (
@@ -152,13 +165,7 @@ export function CareerTab({ result }: { result: AnalysisResult }) {
                     fillOpacity={0.2}
                     strokeWidth={2}
                   />
-                  <Tooltip
-                    contentStyle={{
-                      background: "rgba(8,8,20,0.95)",
-                      border: `1px solid ${GOLD.border}`,
-                      borderRadius: 8,
-                    }}
-                  />
+                  <Tooltip {...chartTooltipStyle} />
                 </RadarChart>
               </ResponsiveContainer>
             </motion.div>
@@ -192,11 +199,9 @@ export function CareerTab({ result }: { result: AnalysisResult }) {
                   tickLine={false}
                 />
                 <Tooltip
-                  contentStyle={{
-                    background: "rgba(8,8,20,0.95)",
-                    border: `1px solid ${GOLD.border}`,
-                    borderRadius: 10,
-                  }}
+                  {...chartTooltipStyle}
+                  contentStyle={{ ...chartTooltipStyle.contentStyle, borderRadius: 10 }}
+                  cursor={chartCursorStyle}
                   formatter={(v, _, item) => {
                     const p = item as { payload?: { fullName?: string } };
                     return [`${v}%`, p.payload?.fullName ?? ""];
@@ -259,31 +264,41 @@ export function CareerTab({ result }: { result: AnalysisResult }) {
                   )}
                 </motion.div>
                 <motion.div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start gap-2 mb-2">
-                    <div>
-                      <p className="text-sm font-medium text-white/85 leading-snug">
-                        {career.title}
-                      </p>
-                      <p className="text-[9px] text-white/25 uppercase tracking-widest font-mono mt-0.5">
-                        {career.category} · {tier.label}
-                      </p>
+                    <div className="flex justify-between items-start gap-2 mb-2">
+                      <div>
+                        <p className="text-sm font-medium text-white/85 leading-snug">
+                          {career.title}
+                        </p>
+                        <p className="text-[9px] text-white/25 uppercase tracking-widest font-mono mt-0.5">
+                          {career.family ?? career.category} · {tier.label}
+                        </p>
+                      </div>
+                      <span className="text-lg font-mono tabular-nums flex-shrink-0" style={{ color: tier.color }}>
+                        {pct}%
+                      </span>
                     </div>
-                    <span className="text-lg font-mono tabular-nums flex-shrink-0" style={{ color: tier.color }}>
-                      {pct}%
-                    </span>
-                  </div>
-                  <motion.div
-                    className="h-1 rounded-full overflow-hidden"
-                    style={{ background: "rgba(255,255,255,0.05)" }}
-                  >
                     <motion.div
-                      className="h-full rounded-full"
-                      style={{ background: GOLD.bar }}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.8, delay: 0.1 + i * 0.05 }}
-                    />
-                  </motion.div>
+                      className="h-1 rounded-full overflow-hidden"
+                      style={{ background: "rgba(255,255,255,0.05)" }}
+                    >
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ background: GOLD.bar }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.8, delay: 0.1 + i * 0.05 }}
+                      />
+                    </motion.div>
+                    {career.key_strengths && career.key_strengths.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {career.key_strengths.slice(0, 2).map((s) => (
+                          <span key={s} className="text-[8px] px-1.5 py-0.5 rounded font-mono"
+                            style={{ background: "rgba(196,165,116,0.08)", color: "rgba(232,220,200,0.5)", border: "1px solid rgba(196,165,116,0.15)" }}>
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                 </motion.div>
               </motion.div>
             );

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import { useParams, useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { getAnalysis, reportDownloadUrl, mediaUrl } from "@/lib/api";
+import { getAnalysis, downloadReport, mediaUrl } from "@/lib/api";
 import type { AnalysisResult } from "@/lib/types";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { MagneticButton } from "@/components/ui/MagneticButton";
@@ -13,15 +13,18 @@ import { PipelineTracker } from "@/components/analysis/PipelineTracker";
 import { OverviewTab } from "@/components/analysis/results/OverviewTab";
 import { ExtensionsTab } from "@/components/analysis/results/ExtensionsTab";
 import { CareerTab } from "@/components/analysis/results/CareerTab";
+import { QuotientsTab } from "@/components/analysis/results/QuotientsTab";
 import { GOLD } from "@/lib/analysis-theme";
 import { cn, fingerLabel, fingerRouteKey, formatRidgeCount } from "@/lib/utils";
 import {
   Download, RefreshCw, AlertCircle, Fingerprint,
-  Loader2, Clock, User, Layers,
+  Loader2, Clock, User, Layers, Sparkles,
 } from "lucide-react";
+import { useAuthStore } from "@/store/authStore";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
 
 const IN_PROGRESS = new Set(["preprocessing", "extracting", "mapping", "extending", "generating_report"]);
-const TABS = ["overview", "fingerprints", "extensions", "career"] as const;
+const TABS = ["overview", "fingerprints", "extensions", "career", "quotients"] as const;
 
 const PATTERN_COLORS: Record<string, string> = {
   whorl: "#c4a574",
@@ -31,11 +34,45 @@ const PATTERN_COLORS: Record<string, string> = {
   unknown: "#475569",
 };
 
-export default function AnalysisPage() {
+function AnalysisPageContent() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { user } = useAuthGuard("partner");
+  const features = useAuthStore((s) => s.features);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<typeof TABS[number]>("overview");
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadReport = useCallback(async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadReport(id, result?.subject_name);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Report download failed.");
+    } finally {
+      setDownloading(false);
+    }
+  }, [downloading, id, result?.subject_name]);
+
+  // Read active tab from URL (?tab=overview) so it survives page refresh
+  // and the link is directly shareable.
+  const urlTab = searchParams.get("tab") as typeof TABS[number] | null;
+  const [tab, setTabState] = useState<typeof TABS[number]>(
+    urlTab && (TABS as readonly string[]).includes(urlTab) ? urlTab : "overview"
+  );
+
+  const setTab = useCallback(
+    (next: typeof TABS[number]) => {
+      setTabState(next);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", next);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname, searchParams]
+  );
 
   const load = useCallback(async () => {
     try {
@@ -81,7 +118,6 @@ export default function AnalysisPage() {
 
   return (
     <div className="min-h-screen pb-24">
-      {/* Hero header */}
       <div className="relative overflow-hidden border-b border-white/[0.05] py-10 px-6">
         <div className="absolute inset-0 opacity-60">
           <FingerprintField opacity={0.06} animated={isProcessing} color="196, 165, 116" />
@@ -134,11 +170,24 @@ export default function AnalysisPage() {
                 Refresh
               </MagneticButton>
               {result.report_url && (
-                <a href={reportDownloadUrl(id, result.report_url)} target="_blank" rel="noopener noreferrer">
-                  <MagneticButton size="sm" icon={<Download className="w-3.5 h-3.5" />}>
-                    Download Report
+                <MagneticButton
+                  size="sm"
+                  icon={downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                  onClick={handleDownloadReport}
+                >
+                  {downloading ? "Downloading…" : "Download Report"}
+                </MagneticButton>
+              )}
+              {isComplete && features?.ai_consultant !== "false" && features?.ai_consultant !== "0" && (
+                <Link href={`/analysis/${id}/chat`}>
+                  <MagneticButton
+                    size="sm"
+                    icon={<Sparkles className="w-3.5 h-3.5" />}
+                    className="text-[#0a0a12] font-semibold"
+                  >
+                    DMIT Insight
                   </MagneticButton>
-                </a>
+                </Link>
               )}
             </div>
           </motion.div>
@@ -216,7 +265,7 @@ export default function AnalysisPage() {
                   key={t}
                   onClick={() => setTab(t)}
                   className={cn(
-                    "relative px-5 py-2.5 text-xs font-medium capitalize transition-all duration-300 rounded-xl whitespace-nowrap",
+                    "relative px-5 py-2.5 text-xs font-medium capitalize transition-all duration-300 rounded-xl whitespace-nowrap flex items-center gap-1.5",
                     tab === t ? "text-[#1a1510]" : "text-white/35 hover:text-white/60"
                   )}
                   style={
@@ -225,7 +274,13 @@ export default function AnalysisPage() {
                       : undefined
                   }
                 >
-                  {t === "extensions" ? "Extensions" : t === "fingerprints" ? "Fingerprints" : t.charAt(0).toUpperCase() + t.slice(1)}
+                  {t === "extensions" ? "Extensions"
+                    : t === "fingerprints" ? "Fingerprints"
+                    : t === "quotients" ? "Quotients"
+                    : t.charAt(0).toUpperCase() + t.slice(1)}
+                  {t === "quotients" && result.quotients && Object.keys(result.quotients).length > 0 && tab !== "quotients" && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#c4a574] opacity-80" />
+                  )}
                 </button>
               ))}
             </motion.div>
@@ -300,13 +355,27 @@ export default function AnalysisPage() {
                                     <p className="text-xs font-semibold text-white/80">
                                       {fingerLabel(fingerRouteKey(f))}
                                     </p>
-                                    <span
-                                      className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded"
-                                      style={{ color: patColor, background: `${patColor}18` }}
-                                    >
-                                      {f.pattern_type}
-                                    </span>
+                                    <div className="flex flex-col items-end gap-1">
+                                      <span
+                                        className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded"
+                                        style={{ color: patColor, background: `${patColor}18` }}
+                                      >
+                                        {f.pattern_type}
+                                      </span>
+                                      {f.quality_tier && (
+                                        <span className="text-[7px] font-mono uppercase px-1 py-0.5 rounded"
+                                          style={{
+                                            color: f.quality_tier === "High" ? "#10b981" : f.quality_tier === "Medium" ? "#f59e0b" : "#f43f5e",
+                                            background: f.quality_tier === "High" ? "rgba(16,185,129,0.12)" : f.quality_tier === "Medium" ? "rgba(245,158,11,0.12)" : "rgba(244,63,94,0.12)",
+                                          }}>
+                                          {f.quality_tier}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
+                                  {f.pattern_subtype && (
+                                    <p className="text-[8px] text-white/25 font-mono truncate -mt-1">{f.pattern_subtype}</p>
+                                  )}
                                   <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
                                     <DataPoint label="Ridges" value={formatRidgeCount(f.ridge_count, f.pattern_type)} />
                                     <DataPoint label="Fractal" value={f.fractal_dimension?.toFixed(3) ?? "—"} />
@@ -347,6 +416,19 @@ export default function AnalysisPage() {
                   transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                 >
                   <CareerTab result={result} />
+                </motion.div>
+              )}
+
+              {/* QUOTIENTS TAB */}
+              {tab === "quotients" && (
+                <motion.div
+                  key="quotients"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <QuotientsTab result={result} />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -390,5 +472,25 @@ function DataPoint({ label, value }: { label: string; value: string }) {
       <p className="text-[8px] text-white/20 uppercase tracking-widest">{label}</p>
       <p className="text-[11px] text-white/60 font-mono">{value}</p>
     </div>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary in Next.js App Router.
+function AnalysisPageInner() {
+  return <AnalysisPageContent />;
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-[#c4a574] border-t-transparent animate-spin" />
+          <p className="text-sm text-white/30">Loading analysis...</p>
+        </div>
+      </div>
+    }>
+      <AnalysisPageInner />
+    </Suspense>
   );
 }

@@ -14,34 +14,82 @@ function normalizeBase(raw: string): string {
   return /\/api$/.test(trimmed) ? trimmed : `${trimmed}/api`;
 }
 
-/** Resolved API base — a Settings override (localStorage) wins over the build-time env. */
 export function apiBase(): string {
   const override = getApiUrlOverride();
   return override ? normalizeBase(override) : DEFAULT_BASE;
 }
 
-/** API origin without trailing /api — for static uploads & PDF download */
 export function getApiOrigin(): string {
   return apiBase().replace(/\/api\/?$/, "");
 }
 
-/** Full URL for PDF report download */
 export function reportDownloadUrl(sessionId: string, reportUrl?: string | null): string {
   if (reportUrl?.startsWith("http")) return reportUrl;
   if (reportUrl?.startsWith("/")) return `${getApiOrigin()}${reportUrl}`;
   return `${apiBase()}/analysis/${sessionId}/report/download`;
 }
 
-/** Thumbnail or upload image served by FastAPI static mount */
+/**
+ * Download the PDF report with the Bearer token attached.
+ * A plain <a href> navigation can't send Authorization headers, so the
+ * protected download endpoint would always return 401 — fetch it as a
+ * blob instead and trigger the save from an object URL.
+ */
+export async function downloadReport(
+  sessionId: string,
+  subjectName?: string | null
+): Promise<void> {
+  const token = getStoredToken();
+  const res = await fetch(`${apiBase()}/analysis/${sessionId}/report/download`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new Error(`Download failed (${res.status}): ${await res.text()}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const safeName = (subjectName || "dmit-report").replace(/[^\w\- ]+/g, "").trim() || "dmit-report";
+  a.download = `${safeName}-${sessionId.slice(0, 8)}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function mediaUrl(path?: string | null): string | undefined {
   if (!path) return undefined;
   if (path.startsWith("http")) return path;
   return `${getApiOrigin()}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+/** Read the current access token from the Zustand auth store without a hook. */
+function getStoredToken(): string | null {
+  try {
+    // Dynamic import avoids circular deps; Zustand state is readable outside React
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useAuthStore } = require("@/store/authStore");
+    return useAuthStore.getState().accessToken as string | null;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getStoredToken();
+  const authHeader: Record<string, string> = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
+
   const res = await fetch(`${apiBase()}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader,
+      ...init?.headers,
+    },
+    credentials: "include",
     ...init,
   });
   if (!res.ok) {
@@ -57,6 +105,10 @@ export async function createSession(data: {
   subject_name?: string;
   subject_age?: number;
   subject_gender?: string;
+  subject_dob?: string;
+  school?: string;
+  counsellor?: string;
+  parent_name?: string;
   notes?: string;
 }): Promise<AnalysisSession> {
   return request<AnalysisSession>("/sessions", {
@@ -100,8 +152,11 @@ export async function uploadImagesWithSlots(
   }
   form.append("finger_positions", positions.join(","));
 
+  const token = getStoredToken();
   const res = await fetch(`${apiBase()}/analysis/${sessionId}/upload`, {
     method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
     body: form,
   });
   if (!res.ok) throw new Error(`Upload failed: ${await res.text()}`);
@@ -115,8 +170,11 @@ export async function uploadImages(
 ): Promise<{ uploaded: number; total: number }> {
   const form = new FormData();
   files.forEach((f) => form.append("files", f));
+  const token = getStoredToken();
   const res = await fetch(`${apiBase()}/analysis/${sessionId}/upload`, {
     method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
     body: form,
   });
   if (!res.ok) throw new Error(`Upload failed: ${await res.text()}`);

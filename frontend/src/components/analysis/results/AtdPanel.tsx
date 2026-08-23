@@ -77,7 +77,7 @@ export function AtdPanel({
       <div className="flex items-baseline justify-between gap-2 mb-4">
         <h3 className="font-serif-display text-xl text-[#e8dcc8] tracking-tight flex items-center gap-2">
           <Hand className="w-4 h-4" style={{ color: PLUM }} />
-          atd Angle
+          ATD Angle
         </h3>
         <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-white/25">
           Palm · Processing Speed

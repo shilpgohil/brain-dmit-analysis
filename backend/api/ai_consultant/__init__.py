@@ -1,0 +1,1 @@
+"""DMIT AI Consultant package."""

@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { GOLD } from "@/lib/analysis-theme";
+import { GOLD, chartTooltipStyle } from "@/lib/analysis-theme";
 
 interface GoldRadarChartProps {
   data: { label: string; value: number }[];
@@ -40,13 +40,8 @@ export function GoldRadarChart({ data, height = 280 }: GoldRadarChartProps) {
           strokeWidth={2}
         />
         <Tooltip
-          contentStyle={{
-            background: "rgba(8,8,20,0.95)",
-            border: `1px solid ${GOLD.border}`,
-            borderRadius: 12,
-            fontSize: 12,
-            color: GOLD.bright,
-          }}
+          {...chartTooltipStyle}
+          contentStyle={{ ...chartTooltipStyle.contentStyle, fontSize: 12 }}
           formatter={(val) => [`${val}%`, "Capacity"]}
         />
       </RadarChart>

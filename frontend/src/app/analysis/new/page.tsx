@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { createSession, uploadImagesWithSlots, runAnalysis } from "@/lib/api";
@@ -8,6 +8,16 @@ import { getDefaultGeneratePdf, getDefaultUsePreprocessing } from "@/lib/prefere
 import { GlassCard } from "@/components/ui/GlassCard";
 import { MagneticButton } from "@/components/ui/MagneticButton";
 import { FingerprintField } from "@/components/effects/FingerprintField";
+import { FingerGuidanceOverlay } from "@/components/analysis/FingerGuidanceOverlay";
+import { PalmGuidanceOverlay } from "@/components/analysis/PalmGuidanceOverlay";
+import {
+  FINGER_GUIDANCE,
+  PALM_GUIDANCE,
+  hasSeenUploadGuidance,
+  markUploadGuidanceSeen,
+  markPalmGuidanceSeen,
+} from "@/lib/finger-guidance";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { cn } from "@/lib/utils";
 import {
   Fingerprint,
@@ -19,6 +29,7 @@ import {
   Info,
   User,
   Hand,
+  HelpCircle,
 } from "lucide-react";
 
 const FINGER_SLOTS = [
@@ -45,24 +56,114 @@ interface SlotFile {
   slotId: string;
 }
 
+// Mirrors api/helpers.py's parse_finger_position / parse_palm_position so a
+// bulk-dropped batch of already-named files (R1.bmp, L3Center.jpg, Lpalm.png)
+// lands on the *correct* slot instead of being assigned by arbitrary drop
+// order, which silently mislabelled fingers whenever filenames were present.
+const FILE_EXT_RE = /\.(bmp|jpe?g|png|tiff?|webp)$/i;
+const SLOT_PREFIX_RE = /^(R[1-5]|L[1-5])/i;
+
+function isSupportedImageFile(file: File): boolean {
+  return file.type.startsWith("image/") || FILE_EXT_RE.test(file.name);
+}
+
+function detectSlotFromFilename(filename: string): string | null {
+  const stem = filename.replace(/\.[^./\\]+$/, "");
+  const prefixMatch = SLOT_PREFIX_RE.exec(stem);
+  if (prefixMatch) return prefixMatch[1].toUpperCase();
+  const upper = stem.toUpperCase();
+  if (upper.includes("LPALM")) return "LPALM";
+  if (upper.includes("RPALM")) return "RPALM";
+  for (const pos of FINGER_SLOTS) {
+    if (upper.includes(pos.id)) return pos.id;
+  }
+  return null;
+}
+
 export default function NewAnalysisPage() {
   const router = useRouter();
+  const { user, isLoading } = useAuthGuard("partner");
   const [slots, setSlots] = useState<(SlotFile | null)[]>(Array(10).fill(null));
   const [palms, setPalms] = useState<(SlotFile | null)[]>([null, null]);
   const [draggingSlot, setDraggingSlot] = useState<number | null>(null);
   const [subjectName, setSubjectName] = useState("");
   const [subjectAge, setSubjectAge] = useState("");
+  const [subjectGender, setSubjectGender] = useState<"" | "male" | "female" | "other">("");
+  const [school, setSchool] = useState("");
+  const [counsellor, setCounsellor] = useState("");
   const [purpose, setPurpose] = useState<"self" | "child" | "career" | "couple" | "corporate" | "other">("self");
   const [usePreprocessing, setUsePreprocessing] = useState(false);
   const [generatePdf, setGeneratePdf] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [guidanceSlotIndex, setGuidanceSlotIndex] = useState<number | null>(null);
+  const [palmGuidanceIndex, setPalmGuidanceIndex] = useState<number | null>(null);
+  const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const palmInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     setUsePreprocessing(getDefaultUsePreprocessing());
     setGeneratePdf(getDefaultGeneratePdf());
   }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 3000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!hasSeenUploadGuidance()) {
+      setGuidanceSlotIndex(0);
+    }
+  }, []);
+
+  const openGuidanceForSlot = (slotIndex: number) => {
+    setGuidanceSlotIndex(slotIndex);
+  };
+
+  const closeGuidance = () => {
+    setGuidanceSlotIndex(null);
+    markUploadGuidanceSeen();
+  };
+
+  const continueGuidanceUpload = () => {
+    if (guidanceSlotIndex === null) return;
+    markUploadGuidanceSeen();
+    const idx = guidanceSlotIndex;
+    setGuidanceSlotIndex(null);
+    requestAnimationFrame(() => {
+      fileInputRefs.current[idx]?.click();
+    });
+  };
+
+  // Tapping an empty slot always shows the guidance overlay so the user
+  // sees placement instructions before the file picker opens.
+  // On filled slots the outer div click is a no-op (filled guard below).
+  const handleEmptySlotClick = (slotIndex: number) => {
+    openGuidanceForSlot(slotIndex);
+  };
+
+  const openPalmGuidance = (palmIndex: number) => {
+    setPalmGuidanceIndex(palmIndex);
+  };
+
+  const closePalmGuidance = () => {
+    markPalmGuidanceSeen();
+    setPalmGuidanceIndex(null);
+  };
+
+  const continuePalmGuidance = () => {
+    if (palmGuidanceIndex === null) return;
+    markPalmGuidanceSeen();
+    const idx = palmGuidanceIndex;
+    setPalmGuidanceIndex(null);
+    requestAnimationFrame(() => {
+      palmInputRefs.current[idx]?.click();
+    });
+  };
 
   const filledCount = slots.filter(Boolean).length;
   const progress = (filledCount / 10) * 100;
@@ -83,14 +184,83 @@ export default function NewAnalysisPage() {
     if (file) assignFile(file, slotIndex);
   };
 
+  // Handles both drag-drop and click-to-browse bulk selection. Builds the
+  // whole next slots/palms array locally in one pass (rather than calling
+  // setSlots per-file against the render-time `slots` closure, which was
+  // the root cause of files overwriting each other / landing in the wrong
+  // slot whenever some slots were already filled) so every file is placed
+  // exactly once, in a single, predictable state update.
+  const handleBulkFiles = useCallback(
+    (fileList: File[]) => {
+      if (fileList.length === 0) return;
+
+      const images = fileList.filter(isSupportedImageFile);
+      const rejectedCount = fileList.length - images.length;
+
+      const nextSlots = [...slots];
+      const nextPalms = [...palms];
+      const unmatched: File[] = [];
+
+      for (const file of images) {
+        const slotId = detectSlotFromFilename(file.name);
+        if (slotId === "LPALM" || slotId === "RPALM") {
+          const idx = PALM_SLOTS.findIndex((s) => s.id === slotId);
+          if (nextPalms[idx]?.preview) URL.revokeObjectURL(nextPalms[idx]!.preview);
+          nextPalms[idx] = { file, preview: URL.createObjectURL(file), slotId };
+        } else if (slotId) {
+          const idx = FINGER_SLOTS.findIndex((s) => s.id === slotId);
+          if (nextSlots[idx]?.preview) URL.revokeObjectURL(nextSlots[idx]!.preview);
+          nextSlots[idx] = { file, preview: URL.createObjectURL(file), slotId };
+        } else {
+          unmatched.push(file);
+        }
+      }
+
+      // Files with no recognizable slot in their filename fill whatever
+      // finger slots are still empty, in order.
+      let cursor = 0;
+      let overflow = 0;
+      for (const file of unmatched) {
+        while (cursor < nextSlots.length && nextSlots[cursor]) cursor++;
+        if (cursor >= nextSlots.length) {
+          overflow++;
+          continue;
+        }
+        nextSlots[cursor] = { file, preview: URL.createObjectURL(file), slotId: FINGER_SLOTS[cursor].id };
+        cursor++;
+      }
+
+      setSlots(nextSlots);
+      setPalms(nextPalms);
+
+      const problems: string[] = [];
+      if (rejectedCount > 0) {
+        problems.push(`${rejectedCount} file${rejectedCount !== 1 ? "s" : ""} skipped (unsupported format)`);
+      }
+      if (overflow > 0) {
+        problems.push(`${overflow} file${overflow !== 1 ? "s" : ""} could not be placed (all 10 slots are full)`);
+      }
+      if (problems.length > 0) {
+        setError(problems.join(". ") + ".");
+        setNotice(null);
+      } else {
+        setError(null);
+        const placed = images.length - overflow;
+        setNotice(`${placed} image${placed !== 1 ? "s" : ""} added.`);
+      }
+    },
+    [slots, palms]
+  );
+
   const handleBulkDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const files = Array.from(e.dataTransfer.files);
-    files.forEach((file, i) => {
-      const nextEmpty = slots.findIndex((s, idx) => !s && idx >= i);
-      if (nextEmpty !== -1) assignFile(file, nextEmpty);
-    });
+    handleBulkFiles(Array.from(e.dataTransfer.files));
+  };
+
+  const handleBulkFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleBulkFiles(Array.from(e.target.files ?? []));
+    e.target.value = "";
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>, slotIndex: number) => {
@@ -137,7 +307,10 @@ export default function NewAnalysisPage() {
     try {
       const session = await createSession({
         subject_name: subjectName || undefined,
-        subject_age: subjectAge ? parseInt(subjectAge) : undefined,
+        subject_age: subjectAge ? Number.parseInt(subjectAge) : undefined,
+        subject_gender: subjectGender || undefined,
+        school: school || undefined,
+        counsellor: counsellor || undefined,
         notes: `Purpose: ${purpose}`,
       });
       const palmFiles = palms.filter(Boolean) as SlotFile[];
@@ -152,6 +325,14 @@ export default function NewAnalysisPage() {
       setLoading(false);
     }
   };
+
+  if (isLoading || !user) {
+    return (
+      <div className="min-h-screen pb-24 px-6 pt-12 flex items-center justify-center">
+        <div className="w-7 h-7 rounded-full border-2 border-[#c4a574] border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-24 px-6 pt-12">
@@ -170,6 +351,10 @@ export default function NewAnalysisPage() {
           </h1>
           <p className="text-white/40 mt-2">
             Upload up to 10 fingerprint images. Assign each to a finger position.
+          </p>
+          <p className="text-[11px] text-white/25 mt-2 leading-relaxed max-w-2xl">
+            Supports phone photos and USB fingerprint-scanner exports (BMP, PNG, JPEG, TIFF, WebP).
+            Scanner-grade prints are detected automatically and skip phone-photo enhancement.
           </p>
         </motion.div>
 
@@ -198,7 +383,7 @@ export default function NewAnalysisPage() {
             <User className="w-4 h-4 text-white/30" />
             <span className="text-xs text-white/50 uppercase tracking-widest font-mono">Subject Information</span>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <CinematicInput
               label="Subject Name"
               placeholder="Jane Smith"
@@ -212,6 +397,24 @@ export default function NewAnalysisPage() {
               value={subjectAge}
               onChange={setSubjectAge}
             />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+            <div>
+              <label className="text-[10px] font-mono uppercase text-white/35 mb-2 block">Gender</label>
+              <select
+                value={subjectGender}
+                onChange={(e) => setSubjectGender(e.target.value as "" | "male" | "female" | "other")}
+                className="w-full h-10 rounded-lg px-3 text-sm text-white/70 focus:outline-none transition-all"
+                style={{ background: "rgba(8,8,24,0.9)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.7)" }}
+              >
+                <option value="" style={{ background: "#0d0d1a" }}>—</option>
+                <option value="male" style={{ background: "#0d0d1a" }}>Male</option>
+                <option value="female" style={{ background: "#0d0d1a" }}>Female</option>
+                <option value="other" style={{ background: "#0d0d1a" }}>Other</option>
+              </select>
+            </div>
+            <CinematicInput label="School / Institution" placeholder="e.g. DPS" value={school} onChange={setSchool} />
+            <CinematicInput label="Counsellor" placeholder="Dr. Sharma" value={counsellor} onChange={setCounsellor} />
           </div>
           <div className="mt-4">
             <label className="text-[10px] font-mono uppercase text-white/35 mb-2 block">Analysis purpose</label>
@@ -231,26 +434,54 @@ export default function NewAnalysisPage() {
             <span className="ml-auto text-xs text-white/25 font-mono">{filledCount} / 10 loaded</span>
           </div>
 
-          {/* Bulk drop zone */}
-          <div
+          {/* Bulk drop zone — drag-drop OR click to browse; files named
+              R1/L1/LPALM etc. auto-map to the right slot, unnamed files
+              fill whatever slots are still empty. */}
+          <label
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleBulkDrop}
             className={cn(
-              "relative mb-5 rounded-xl border border-dashed transition-all duration-300 py-5 flex flex-col items-center gap-2",
+              "relative mb-5 rounded-xl border border-dashed transition-all duration-300 py-5 flex flex-col items-center gap-2 cursor-pointer",
               dragOver
                 ? "border-[rgba(0,212,255,0.5)] bg-[rgba(0,212,255,0.05)]"
                 : "border-white/[0.08] hover:border-white/[0.14] hover:bg-white/[0.02]"
             )}
           >
+            <input
+              type="file"
+              multiple
+              accept="image/*,.bmp,.tif,.tiff,.webp"
+              className="hidden"
+              onChange={handleBulkFileInput}
+            />
             <Upload className="w-5 h-5 text-white/20" />
             <p className="text-xs text-white/30">
-              Drop multiple images here to auto-assign to slots
+              Drop or click to select multiple images at once
             </p>
-          </div>
+            <p className="text-[10px] text-white/20">
+              Files named like R1.bmp, L3.jpg, or LPalm.png auto-assign to the right slot
+            </p>
+          </label>
 
-          {/* 2Ã—5 Finger grid */}
-          <div className="grid grid-cols-5 gap-3">
+          <AnimatePresence>
+            {notice && (
+              <motion.div
+                className="mb-4 flex items-center gap-2 p-2.5 rounded-lg"
+                style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)" }}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.25 }}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                <p className="text-xs text-green-400/90">{notice}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* 2×5 Finger grid — shows 5 columns on all sizes (represents the 5 fingers per hand) */}
+          <div className="grid grid-cols-5 gap-2 sm:gap-3">
             {FINGER_SLOTS.map((slot, i) => {
               const filled = slots[i];
               return (
@@ -260,7 +491,8 @@ export default function NewAnalysisPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] }}
                 >
-                  <label
+                  <div className="relative">
+                  <div
                     className={cn(
                       "relative flex flex-col items-center justify-center rounded-xl cursor-pointer transition-all duration-300 overflow-hidden group",
                       "border aspect-[3/4]",
@@ -271,10 +503,20 @@ export default function NewAnalysisPage() {
                     onDragOver={(e) => { e.preventDefault(); setDraggingSlot(i); }}
                     onDragLeave={() => setDraggingSlot(null)}
                     onDrop={(e) => handleDropOnSlot(e, i)}
+                    onClick={() => { if (!filled) handleEmptySlotClick(i); }}
+                    onKeyDown={(e) => {
+                      if (!filled && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        handleEmptySlotClick(i);
+                      }
+                    }}
+                    role={filled ? undefined : "button"}
+                    tabIndex={filled ? undefined : 0}
                   >
                     <input
+                      ref={(el) => { fileInputRefs.current[i] = el; }}
                       type="file"
-                      accept="image/*,.bmp"
+                      accept="image/*,.bmp,.tif,.tiff,.webp"
                       className="hidden"
                       onChange={(e) => handleFileInput(e, i)}
                     />
@@ -311,12 +553,24 @@ export default function NewAnalysisPage() {
                         {draggingSlot === i && (
                           <div className="absolute inset-0 bg-[rgba(0,212,255,0.08)] rounded-xl" />
                         )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openGuidanceForSlot(i);
+                          }}
+                          className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-black/40 flex items-center justify-center text-white/35 hover:text-white/70 transition-colors"
+                          aria-label={`Help for ${slot.label}`}
+                        >
+                          <HelpCircle className="w-3 h-3" />
+                        </button>
                       </>
                     )}
-                  </label>
+                  </div>
                   <p className="text-[8px] text-white/20 text-center mt-1 leading-tight truncate px-0.5">
                     {slot.label.replace("Right ", "R. ").replace("Left ", "L. ")}
                   </p>
+                  </div>
                 </motion.div>
               );
             })}
@@ -356,22 +610,33 @@ export default function NewAnalysisPage() {
             {PALM_SLOTS.map((slot, i) => {
               const filled = palms[i];
               return (
-                <div key={slot.id}>
-                  <label
+                <div key={slot.id} className="relative">
+                  <div
                     className={cn(
-                      "relative flex flex-col items-center justify-center rounded-xl cursor-pointer transition-all duration-300 overflow-hidden group border aspect-[4/3]",
+                      "relative flex flex-col items-center justify-center rounded-xl transition-all duration-300 overflow-hidden group border aspect-[4/3]",
                       filled
                         ? "border-[rgba(157,139,181,0.4)] bg-[rgba(157,139,181,0.06)]"
-                        : "border-white/[0.07] bg-white/[0.02] hover:border-white/[0.14] hover:bg-white/[0.04]",
+                        : "border-white/[0.07] bg-white/[0.02] hover:border-white/[0.14] hover:bg-white/[0.04] cursor-pointer",
                     )}
+                    onClick={() => { if (!filled) openPalmGuidance(i); }}
+                    onKeyDown={(e) => {
+                      if (!filled && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        openPalmGuidance(i);
+                      }
+                    }}
+                    role={filled ? undefined : "button"}
+                    tabIndex={filled ? undefined : 0}
                   >
                     <input
+                      ref={(el) => { palmInputRefs.current[i] = el; }}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.bmp,.tif,.tiff,.webp"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) assignPalm(file, i);
+                        if (e.target) e.target.value = "";
                       }}
                     />
                     {filled ? (
@@ -384,7 +649,7 @@ export default function NewAnalysisPage() {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                         <button
                           type="button"
-                          onClick={(e) => { e.preventDefault(); removePalm(i); }}
+                          onClick={(e) => { e.stopPropagation(); removePalm(i); }}
                           className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black/50 flex items-center justify-center text-white/50 hover:text-white hover:bg-black/80 transition-colors"
                         >
                           <X className="w-3 h-3" />
@@ -400,9 +665,17 @@ export default function NewAnalysisPage() {
                       <>
                         <Hand className="w-5 h-5 text-white/15 mb-1 group-hover:text-white/30 transition-colors" strokeWidth={1} />
                         <p className="text-[10px] text-white/25 font-mono">{slot.label}</p>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openPalmGuidance(i); }}
+                          className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-black/40 flex items-center justify-center text-white/35 hover:text-white/70 transition-colors"
+                          aria-label={`Help for ${slot.label}`}
+                        >
+                          <HelpCircle className="w-3 h-3" />
+                        </button>
                       </>
                     )}
-                  </label>
+                  </div>
                 </div>
               );
             })}
@@ -474,6 +747,28 @@ export default function NewAnalysisPage() {
           </MagneticButton>
         </div>
       </div>
+
+      <FingerGuidanceOverlay
+        open={guidanceSlotIndex !== null}
+        info={
+          guidanceSlotIndex !== null
+            ? FINGER_GUIDANCE[FINGER_SLOTS[guidanceSlotIndex].id]
+            : null
+        }
+        onClose={closeGuidance}
+        onContinue={continueGuidanceUpload}
+      />
+
+      <PalmGuidanceOverlay
+        open={palmGuidanceIndex !== null}
+        info={
+          palmGuidanceIndex !== null
+            ? PALM_GUIDANCE[PALM_SLOTS[palmGuidanceIndex].id]
+            : null
+        }
+        onClose={closePalmGuidance}
+        onContinue={continuePalmGuidance}
+      />
     </div>
   );
 }

@@ -9,8 +9,10 @@ import { CompareView } from "@/components/compare/CompareView";
 import { MagneticButton } from "@/components/ui/MagneticButton";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GitCompare, Loader2 } from "lucide-react";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
 
 export default function ComparePage() {
+  const { user, isLoading } = useAuthGuard("partner");
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [idA, setIdA] = useState("");
   const [idB, setIdB] = useState("");
@@ -20,10 +22,11 @@ export default function ComparePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!user) return;
     listSessions(100)
       .then((s) => setSessions(s.filter((x) => x.status === "completed")))
       .catch(() => setSessions([]));
-  }, []);
+  }, [user]);
 
   const runCompare = async () => {
     if (!idA || !idB || idA === idB) {
@@ -64,11 +67,12 @@ export default function ComparePage() {
               <select
                 value={idA}
                 onChange={(e) => setIdA(e.target.value)}
-                className="w-full h-10 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-white px-3"
+                className="w-full h-10 rounded-lg border border-white/[0.08] text-sm px-3"
+                style={{ background: "rgba(8,8,24,0.9)", color: "rgba(255,255,255,0.7)" }}
               >
-                <option value="">Select…</option>
+                <option value="" style={{ background: "#0d0d1a" }}>Select…</option>
                 {sessions.map((s) => (
-                  <option key={s.id} value={s.id}>
+                  <option key={s.id} value={s.id} style={{ background: "#0d0d1a" }}>
                     {s.subject_name ?? s.id.slice(0, 8)} — {new Date(s.created_at).toLocaleDateString()}
                   </option>
                 ))}
@@ -79,11 +83,12 @@ export default function ComparePage() {
               <select
                 value={idB}
                 onChange={(e) => setIdB(e.target.value)}
-                className="w-full h-10 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-white px-3"
+                className="w-full h-10 rounded-lg border border-white/[0.08] text-sm px-3"
+                style={{ background: "rgba(8,8,24,0.9)", color: "rgba(255,255,255,0.7)" }}
               >
-                <option value="">Select…</option>
+                <option value="" style={{ background: "#0d0d1a" }}>Select…</option>
                 {sessions.map((s) => (
-                  <option key={s.id} value={s.id}>
+                  <option key={s.id} value={s.id} style={{ background: "#0d0d1a" }}>
                     {s.subject_name ?? s.id.slice(0, 8)} — {new Date(s.created_at).toLocaleDateString()}
                   </option>
                 ))}

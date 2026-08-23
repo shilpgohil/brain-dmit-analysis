@@ -45,8 +45,9 @@ export function LearningStylePie({ data, height = 200 }: LearningStylePieProps) 
             border: "1px solid #1e293b",
             borderRadius: "6px",
             fontSize: "12px",
-            color: "#cbd5e1",
           }}
+          itemStyle={{ color: "#cbd5e1" }}
+          labelStyle={{ color: "#94a3b8" }}
           formatter={(val) => [`${val}%`]}
         />
         <Legend

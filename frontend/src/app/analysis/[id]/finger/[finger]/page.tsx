@@ -9,6 +9,7 @@ import type { FingerBiometrics } from "@/lib/types";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { MagneticButton } from "@/components/ui/MagneticButton";
 import { FingerprintField } from "@/components/effects/FingerprintField";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { patternLabel, fingerLabel, fingerRouteKey, lobeLabel, lobeDescription, formatRidgeCount } from "@/lib/utils";
 import { ArrowLeft, Fingerprint, AlertCircle, Loader2 } from "lucide-react";
 
@@ -38,6 +39,7 @@ const PATTERN_DESCRIPTIONS: Record<string, string> = {
 
 export default function FingerDetailPage() {
   const { id, finger } = useParams<{ id: string; finger: string }>();
+  useAuthGuard("partner");
   const [data, setData] = useState<FingerBiometrics | null>(null);
   const [error, setError] = useState<string | null>(null);
 

@@ -1,0 +1,33 @@
+# DMIT Analysis Platform — Backend Python dependencies
+# Generated from verified installed versions on Aug 22, 2026.
+# Install: pip install -r backend/requirements.txt
+
+# --- API server ---
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9     # multipart/form-data file uploads
+pydantic>=2.0.0
+
+# --- Image & fingerprint processing ---
+numpy>=1.26.0
+opencv-python-headless>=4.9.0   # headless = same algorithms, no GUI bindings (saves ~80 MB on server)
+scipy>=1.12.0               # signal processing, image topology
+Pillow>=10.0.0              # image loading, resizing, thumbnail
+
+# --- Auth + QR ---
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.0.0                      # used directly in auth/security.py (not via passlib)
+passlib[bcrypt]>=1.7.4             # kept as optional dep; bcrypt is the direct runtime dep
+qrcode>=7.4.2
+pymupdf>=1.23.0             # PDF verification / page-count checks
+matplotlib>=3.8.0           # chart generation (gauge, radar, bar, pie)
+
+# --- AI Consultant ---
+openai>=1.30.0              # NVIDIA / Groq via OpenAI-compatible API
+duckduckgo-search>=6.0.0    # real-time web search for AI consultant
+
+# --- Database (production) ---
+psycopg2-binary>=2.9.9      # PostgreSQL adapter (Neon); not used in SQLite/local mode
+
+# --- Object storage (production) ---
+boto3>=1.34.0               # Cloudflare R2 (S3-compatible); not used when R2 not configured
