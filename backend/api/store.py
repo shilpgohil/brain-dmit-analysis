@@ -5,7 +5,12 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from api.persistence import delete_session as _delete_db, load_all_sessions, save_session
+from api.persistence import (
+    delete_session as _delete_db,
+    load_all_sessions,
+    load_session as _load_one_db,
+    save_session,
+)
 
 session_store: Dict[str, Any] = {}
 
@@ -55,3 +60,16 @@ def persist_session(session_id: str) -> None:
 def remove_session(session_id: str) -> None:
     session_store.pop(session_id, None)
     _delete_db(session_id)
+
+
+def refresh_session_from_db(session_id: str) -> None:
+    """
+    Re-read one session from the database into memory.
+
+    Needed in split-service mode: the analysis worker (separate Render
+    instance) writes pipeline progress and results to Neon; the main API's
+    in-memory copy is stale until refreshed.
+    """
+    fresh = _load_one_db(session_id)
+    if fresh is not None:
+        session_store[session_id] = fresh

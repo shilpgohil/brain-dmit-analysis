@@ -21,6 +21,19 @@ def _json_default(obj: Any) -> Any:
         return obj.value
     if hasattr(obj, "model_dump"):
         return obj.model_dump(mode="json")
+    # NumPy scalars/arrays appear in the raw pipeline output that the worker
+    # persists for deferred PDF generation on the main API.
+    type_name = type(obj).__module__
+    if type_name == "numpy":
+        import numpy as np
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
@@ -55,6 +68,22 @@ def load_all_sessions() -> Dict[str, Any]:
         except json.JSONDecodeError:
             continue
     return store
+
+
+def load_session(session_id: str) -> Dict[str, Any] | None:
+    """Load a single session from the database (used to sync state written
+    by the analysis worker service into this process's memory)."""
+    init_db()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT data FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+    if not row:
+        return None
+    try:
+        return json.loads(row["data"], object_hook=_json_object_hook)
+    except json.JSONDecodeError:
+        return None
 
 
 def save_session(session_id: str, session: Dict[str, Any]) -> None:

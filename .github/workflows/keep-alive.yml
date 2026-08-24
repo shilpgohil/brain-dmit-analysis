@@ -1,17 +1,14 @@
-name: Keep Render backend awake
+name: Keep backends awake
 
-# Render's free/starter tier spins the service down after ~15 minutes of
-# inactivity. A cold start for this project (OpenCV + NumPy + SciPy + ML libs)
-# takes 30–60 seconds, making the first request feel broken.
+# Render free instances sleep after ~15 min of inactivity; cold starts take
+# 30-60 s. This pings BOTH services every 10 minutes so they stay warm.
 #
-# This workflow pings /api/health every 10 minutes so the instance never
-# idles long enough to sleep.
+# Required GitHub repository secrets:
+#   RENDER_BACKEND_URL — main API,       e.g. https://dmit-api.onrender.com
+#   WORKER_BACKEND_URL — analysis worker, e.g. https://dmit-worker.onrender.com
 #
-# Setup:
-#   1. Deploy the backend on Render and note the service URL.
-#   2. Add a GitHub repository secret named RENDER_BACKEND_URL with the value
-#      e.g.  https://dmit-api.onrender.com
-#   3. The schedule starts automatically on the next cron tick.
+# The two services live on two separate Render accounts, so each gets its
+# own 750 free instance-hours/month — enough for both to stay on 24/7.
 
 on:
   schedule:
@@ -20,12 +17,12 @@ on:
 
 jobs:
   ping:
-    name: Ping /api/health
+    name: Ping both backends
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 4
 
     steps:
-      - name: Wake up Render backend
+      - name: Ping main API
         run: |
           curl --silent --show-error --fail \
             --max-time 60 \
@@ -33,3 +30,17 @@ jobs:
             --retry-delay 15 \
             --retry-all-errors \
             "${{ secrets.RENDER_BACKEND_URL }}/api/health"
+
+      - name: Ping analysis worker
+        if: always()   # ping the worker even if the main API ping failed
+        run: |
+          if [ -z "${{ secrets.WORKER_BACKEND_URL }}" ]; then
+            echo "WORKER_BACKEND_URL not set - skipping"
+            exit 0
+          fi
+          curl --silent --show-error --fail \
+            --max-time 60 \
+            --retry 3 \
+            --retry-delay 15 \
+            --retry-all-errors \
+            "${{ secrets.WORKER_BACKEND_URL }}/health"

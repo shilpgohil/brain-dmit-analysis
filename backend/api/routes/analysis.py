@@ -4,7 +4,9 @@ Analysis pipeline routes.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import re
 import shutil
 import sys
@@ -471,7 +473,21 @@ def _extract_careers(ext_results: dict, agg: Optional[dict] = None) -> list:
     return sorted(careers, key=lambda x: x.match_score, reverse=True)[:12]
 
 
-def _run_pipeline_sync(session_id: str, use_preprocessing: bool, generate_pdf: bool) -> None:
+def _run_pipeline_sync(
+    session_id: str,
+    use_preprocessing: bool,
+    generate_pdf: bool,
+    defer_pdf: bool = False,
+) -> None:
+    """
+    Run the full analysis pipeline for a session.
+
+    defer_pdf=True (worker mode in the split-service architecture):
+      the heavy analysis runs here, but PDF generation is skipped and the raw
+      pipeline output is persisted so the MAIN API can render the PDF with
+      matplotlib/reportlab on its own instance. This keeps each 512 MB Render
+      instance under its memory ceiling.
+    """
     session = session_store.get(session_id)
     if not session:
         return
@@ -488,6 +504,9 @@ def _run_pipeline_sync(session_id: str, use_preprocessing: bool, generate_pdf: b
                 if detail is not None:
                     s["detail"] = detail
                 break
+        # Persist stage progress so the main API (separate process in split
+        # mode) can serve live pipeline progress to the polling frontend.
+        persist_session(session_id)
 
     stage_defs = [
         ("preprocessing", "Image Preprocessing"),
@@ -654,6 +673,28 @@ def _run_pipeline_sync(session_id: str, use_preprocessing: bool, generate_pdf: b
         )
 
         report_url = None
+        if generate_pdf and defer_pdf:
+            # ── Worker mode: hand PDF generation to the main API ────────────
+            # Persist the raw pipeline output; the main API renders the PDF
+            # with matplotlib/reportlab on its own instance (memory split).
+            full_result["quotients"] = quotient_dict
+            full_result["db_careers"] = [c.model_dump() for c in db_careers]
+            session["full_result"] = full_result
+            session["pdf_pending"] = True
+            update_stage("report", "running", detail="Queued on report service")
+
+            result.warnings = warnings
+            result.processing_time_ms = round((time.time() - t_start) * 1000, 1)
+            result.status = AnalysisStatus.GENERATING_REPORT
+            result.pipeline_stages = [PipelineStage(**s) for s in session["pipeline_stages"]]
+
+            session["result"] = result
+            session["status"] = AnalysisStatus.GENERATING_REPORT
+            session["updated_at"] = datetime.now()
+            session.pop("error", None)
+            persist_session(session_id)
+            return
+
         if generate_pdf:
             session["status"] = AnalysisStatus.GENERATING_REPORT
             update_stage("report", "running")
@@ -731,6 +772,139 @@ async def _run_pipeline(session_id: str, use_preprocessing: bool, generate_pdf: 
     await asyncio.to_thread(_run_pipeline_sync, session_id, use_preprocessing, generate_pdf)
 
 
+# ── Split-service mode ─────────────────────────────────────────────────────
+# When WORKER_URL is set, the heavy analysis runs on a dedicated worker
+# instance; this main API only handles the light request path + PDF assembly.
+
+WORKER_URL = os.environ.get("WORKER_URL", "").rstrip("/")
+WORKER_SECRET = os.environ.get("WORKER_SECRET", "")
+
+
+def _dispatch_to_worker_sync(session_id: str, use_preprocessing: bool, generate_pdf: bool) -> None:
+    """
+    POST the job to the worker with wake-up retries (a sleeping free-tier
+    instance takes 30-60 s to boot; retry until it accepts).
+    On repeated failure, mark the session failed so the frontend isn't stuck.
+    """
+    import urllib.request
+    import urllib.error
+
+    payload = json.dumps({
+        "session_id": session_id,
+        "use_preprocessing": use_preprocessing,
+        "generate_pdf": generate_pdf,
+    }).encode()
+
+    last_err = None
+    for attempt in range(6):  # ~3 minutes of retries, covers cold start
+        try:
+            req = urllib.request.Request(
+                f"{WORKER_URL}/internal/analyze",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Worker-Secret": WORKER_SECRET,
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                if resp.status == 200:
+                    logger.info("Dispatched session %s to worker", session_id)
+                    return
+        except Exception as e:
+            last_err = e
+            logger.warning("Worker dispatch attempt %d failed: %s", attempt + 1, e)
+            time.sleep(min(30, 5 * (attempt + 1)))
+
+    session = session_store.get(session_id)
+    if session:
+        session["status"] = AnalysisStatus.FAILED
+        session["error"] = f"Analysis worker unreachable: {last_err}"
+        persist_session(session_id)
+
+
+def _finalize_pdf_sync(session_id: str) -> None:
+    """
+    Render the PDF on the MAIN API from the worker's persisted pipeline output.
+    Runs when polling notices status=generating_report with pdf_pending set.
+    """
+    session = session_store.get(session_id)
+    if not session or not session.get("pdf_pending"):
+        return
+
+    full_result = session.get("full_result")
+    if not isinstance(full_result, dict):
+        # Nothing to render from — complete without a report
+        _complete_after_pdf(session_id, session, report_url=None,
+                            warning="Report data missing; PDF skipped.")
+        return
+
+    t0 = time.time()
+    report_url = None
+    warning = None
+    try:
+        report_path = str(OUTPUT_DIR / f"dmit_report_{session_id}.pdf")
+        from premium_pdf_report import PremiumReportGenerator
+
+        session_meta = {
+            'subject_name':   session.get('subject_name', ''),
+            'subject_age':    session.get('subject_age', ''),
+            'subject_gender': session.get('subject_gender', ''),
+            'notes':          session.get('notes', ''),
+            'counsellor':     session.get('counsellor', ''),
+            'school':         session.get('school', ''),
+            'report_id':      f"RA-{session_id[:8].upper()}",
+        }
+        created_path = PremiumReportGenerator.create_report(
+            pipeline_data=full_result,
+            output_path=report_path,
+            session=session_meta,
+        )
+        final_path = created_path or report_path
+        session["report_path"] = final_path
+        if storage.ENABLED:
+            r2_pdf_key = f"reports/{session_id}.pdf"
+            storage.upload_file(Path(final_path), r2_pdf_key)
+            session["r2_pdf_key"] = r2_pdf_key
+        report_url = f"/api/analysis/{session_id}/report/download"
+
+        for s in session.get("pipeline_stages", []):
+            if s["id"] == "report":
+                s["status"] = "completed"
+                s["duration_ms"] = round((time.time() - t0) * 1000, 1)
+                s["detail"] = None
+    except Exception as e:
+        logger.exception("Deferred PDF generation failed for session %s", session_id)
+        warning = f"Report generation failed: {e}"
+        for s in session.get("pipeline_stages", []):
+            if s["id"] == "report":
+                s["status"] = "failed"
+                s["detail"] = str(e)
+
+    _complete_after_pdf(session_id, session, report_url, warning)
+
+
+def _complete_after_pdf(session_id: str, session: dict,
+                        report_url: Optional[str], warning: Optional[str]) -> None:
+    r = session.get("result")
+    if isinstance(r, dict):
+        r = AnalysisResult(**r)
+    if r is not None:
+        if warning:
+            r.warnings = list(r.warnings or []) + [warning]
+        r.report_url = report_url
+        r.status = AnalysisStatus.COMPLETED
+        r.pipeline_stages = [PipelineStage(**s) for s in session.get("pipeline_stages", [])]
+        session["result"] = r
+
+    session["status"] = AnalysisStatus.COMPLETED
+    session["updated_at"] = datetime.now()
+    session.pop("pdf_pending", None)
+    session.pop("full_result", None)   # free the large raw payload
+    session.pop("_pdf_task_started", None)
+    persist_session(session_id)
+
+
 @router.post("/run")
 async def run_analysis(
     body: AnalyzeRequest,
@@ -753,8 +927,31 @@ async def run_analysis(
     session.pop("result", None)
     session.pop("error", None)
     session.pop("report_path", None)
-    persist_session(session_id)
+    session.pop("pdf_pending", None)
+    session.pop("full_result", None)
+    session.pop("_pdf_task_started", None)
 
+    if WORKER_URL:
+        # Split-service mode: heavy analysis runs on the dedicated worker.
+        # Seed the pipeline stages now so the frontend sees progress immediately.
+        stage_defs = [
+            ("preprocessing", "Image Preprocessing"),
+            ("extraction", "Feature Extraction"),
+            ("mapping", "Intelligence Mapping"),
+            ("extensions", "Extension Analysis"),
+            ("report", "Report Generation"),
+        ]
+        session["pipeline_stages"] = [_stage(sid, label) for sid, label in stage_defs]
+        session["delegated_to_worker"] = True
+        persist_session(session_id)
+        background_tasks.add_task(
+            asyncio.to_thread,
+            _dispatch_to_worker_sync, session_id, body.use_preprocessing, body.generate_pdf,
+        )
+        return {"session_id": session_id, "status": "started", "mode": "worker"}
+
+    session.pop("delegated_to_worker", None)
+    persist_session(session_id)
     background_tasks.add_task(_run_pipeline, session_id, body.use_preprocessing, body.generate_pdf)
     return {"session_id": session_id, "status": "started"}
 
@@ -778,13 +975,39 @@ def _palm_captures(session: dict, atd: Optional[AtdAnalysis] = None) -> list:
     return palms
 
 
+_IN_FLIGHT = {
+    AnalysisStatus.PREPROCESSING, AnalysisStatus.EXTRACTING,
+    AnalysisStatus.MAPPING, AnalysisStatus.EXTENDING,
+    AnalysisStatus.GENERATING_REPORT,
+    # Sessions reloaded from the DB may carry plain-string statuses
+    "preprocessing", "extracting", "mapping", "extending", "generating_report",
+}
+
+
 @router.get("/{session_id}", response_model=AnalysisResult)
-async def get_analysis(session_id: str, partner=Depends(get_current_partner)):
+async def get_analysis(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    partner=Depends(get_current_partner),
+):
     if session_id not in session_store:
         raise HTTPException(status_code=404, detail="Session not found")
     session = session_store[session_id]
     if session.get("partner_id") and session.get("partner_id") != partner["id"]:
         raise HTTPException(status_code=403, detail="Access denied")
+
+    # ── Split-service mode: sync worker progress from the shared database ──
+    if session.get("delegated_to_worker") and session.get("status") in _IN_FLIGHT:
+        from api.store import refresh_session_from_db
+        refresh_session_from_db(session_id)
+        session = session_store[session_id]
+
+        # Worker finished the analysis; PDF assembly happens HERE on the
+        # main API (matplotlib/reportlab live on this instance, not the worker).
+        if session.get("pdf_pending") and not session.get("_pdf_task_started"):
+            session["_pdf_task_started"] = True
+            persist_session(session_id)
+            background_tasks.add_task(asyncio.to_thread, _finalize_pdf_sync, session_id)
 
     if "result" in session:
         r = session["result"]
