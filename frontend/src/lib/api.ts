@@ -160,31 +160,35 @@ export interface UploadSlot {
   file: File;
 }
 
-/** Upload with L1–R5 slot names so the pipeline maps fingers correctly. */
+/** Upload with L1–R5 slot names so the pipeline maps fingers correctly.
+ *  Uploads ONE image at a time (sequential) to avoid multipart-body OOM
+ *  on memory-constrained servers (Render free/starter tier).
+ */
 export async function uploadImagesWithSlots(
   sessionId: string,
   slots: UploadSlot[]
 ): Promise<{ uploaded: number; total: number }> {
-  const form = new FormData();
-  const positions: string[] = [];
+  const token = getStoredToken();
+  let lastResult = { uploaded: 0, total: 0 };
 
   for (const { slotId, file } of slots) {
+    const form = new FormData();
     const ext = file.name.includes(".") ? file.name.split(".").pop() : "bmp";
     const renamed = new File([file], `${slotId}.${ext}`, { type: file.type || "image/bmp" });
     form.append("files", renamed);
-    positions.push(slotId);
-  }
-  form.append("finger_positions", positions.join(","));
+    form.append("finger_positions", slotId);
 
-  const token = getStoredToken();
-  const res = await fetch(`${apiBase()}/analysis/${sessionId}/upload`, {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    credentials: "include",
-    body: form,
-  });
-  if (!res.ok) throw new Error(`Upload failed: ${await res.text()}`);
-  return res.json();
+    const res = await fetch(`${apiBase()}/analysis/${sessionId}/upload`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
+      body: form,
+    });
+    if (!res.ok) throw new Error(`Upload failed for ${slotId}: ${await res.text()}`);
+    lastResult = await res.json();
+  }
+
+  return lastResult;
 }
 
 /** Legacy bulk upload (filenames should contain L1/R1 etc. if possible). */
