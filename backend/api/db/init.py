@@ -193,19 +193,27 @@ _ALTER_SESSIONS_IDX = "CREATE INDEX IF NOT EXISTS idx_sessions_partner ON sessio
 
 
 def init_auth_db() -> None:
-    """Create all auth/partner tables. Safe to call repeatedly (IF NOT EXISTS)."""
+    """
+    Create all auth/partner tables. Safe to call repeatedly (IF NOT EXISTS).
+
+    Each ALTER TABLE runs in its own connection so that a 'column already
+    exists' error on one statement cannot leave the transaction in an aborted
+    state and block the next statement (psycopg2 InFailedSqlTransaction).
+    """
+    # ── Schema DDL — one transaction ─────────────────────────────────────────
     with get_conn() as conn:
         conn.executescript(_SCHEMA)
-        # ALTER TABLE silently ignored if column already exists
-        try:
-            conn.execute(_ALTER_SESSIONS)
-            conn.commit()
-        except Exception:
-            pass
-        conn.execute(_ALTER_SESSIONS_IDX)
-        # Add quotients_json to session_reports if created before this migration
-        try:
-            conn.execute("ALTER TABLE session_reports ADD COLUMN quotients_json TEXT")
-        except Exception:
-            pass
         conn.commit()
+
+    # ── Idempotent migrations — each in its own connection ────────────────────
+    for stmt in (
+        _ALTER_SESSIONS,
+        _ALTER_SESSIONS_IDX,
+        "ALTER TABLE session_reports ADD COLUMN quotients_json TEXT",
+    ):
+        try:
+            with get_conn() as conn:
+                conn.execute(stmt)
+                conn.commit()
+        except Exception:
+            pass  # Column / index already exists — that is fine

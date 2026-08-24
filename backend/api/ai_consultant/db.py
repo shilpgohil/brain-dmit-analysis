@@ -40,13 +40,15 @@ def init_chat_db() -> None:
     """Create chat tables. Safe to call repeatedly (IF NOT EXISTS)."""
     with get_conn() as conn:
         conn.executescript(_SCHEMA)
-        # Idempotent: add title column to existing tables
-        try:
+        conn.commit()
+    # Idempotent migration — separate connection so an existing-column error
+    # does not leave the transaction aborted for subsequent statements.
+    try:
+        with get_conn() as conn:
             conn.execute("ALTER TABLE chat_threads ADD COLUMN title TEXT")
             conn.commit()
-        except Exception:
-            pass
-        conn.commit()
+    except Exception:
+        pass  # Column already exists — fine
     logger.info("ChatDB: chat_threads + chat_messages tables ready")
 
 
