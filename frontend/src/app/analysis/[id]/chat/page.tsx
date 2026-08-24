@@ -974,7 +974,11 @@ export default function ChatPage() {
       </AnimatePresence>
 
       {/* ── Main area ──────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 relative z-10">
+      {/* min-h-0 is REQUIRED here too: in a flex column, every intermediate
+          flex ancestor needs min-h-0 for overflow-y-auto to work at any depth.
+          Without it the column expands to match content and the child scroll
+          div has infinite height — the mouse wheel sees nothing to scroll. */}
+      <div className="flex-1 min-h-0 flex flex-col min-w-0 relative z-10 overflow-hidden">
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 h-12 flex-shrink-0"
           style={{ borderBottom: `1px solid ${GOLD.border}`, background: "rgba(4,4,15,0.7)", backdropFilter: "blur(12px)" }}>
