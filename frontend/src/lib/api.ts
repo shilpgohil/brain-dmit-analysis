@@ -30,10 +30,14 @@ export function reportDownloadUrl(sessionId: string, reportUrl?: string | null):
 }
 
 /**
- * Download the PDF report with the Bearer token attached.
- * A plain <a href> navigation can't send Authorization headers, so the
- * protected download endpoint would always return 401 — fetch it as a
- * blob instead and trigger the save from an object URL.
+ * Download the PDF report.
+ *
+ * Two modes:
+ *  1. Storage (B2/R2) mode — backend returns JSON {type:"redirect", url, filename}.
+ *     We open the presigned URL directly via a hidden <a> click to avoid CORS
+ *     issues that arise when fetch() follows a cross-origin redirect to B2/R2.
+ *  2. Local/streaming mode — backend returns the PDF blob directly.
+ *     We build an object URL and trigger the save as before.
  */
 export async function downloadReport(
   sessionId: string,
@@ -47,6 +51,26 @@ export async function downloadReport(
   if (!res.ok) {
     throw new Error(`Download failed (${res.status}): ${await res.text()}`);
   }
+
+  const contentType = res.headers.get("content-type") || "";
+
+  // JSON response = presigned URL from B2/R2 — open directly, no CORS issue
+  if (contentType.includes("application/json")) {
+    const data = await res.json();
+    if (data.type === "redirect" && data.url) {
+      const a = document.createElement("a");
+      a.href = data.url;
+      a.download = data.filename || `dmit-report-${sessionId.slice(0, 8)}.pdf`;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+  }
+
+  // PDF blob response = local filesystem (dev mode)
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

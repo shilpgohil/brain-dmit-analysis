@@ -826,15 +826,21 @@ async def download_report(session_id: str, partner=Depends(get_current_partner))
         raise HTTPException(status_code=404, detail="Session not found")
     session = session_store[session_id]
 
-    # Prefer R2 presigned URL (works on ephemeral filesystems like Render)
+    # Prefer B2 / R2 presigned URL.
+    # Return it as JSON {url, filename} so the frontend can open it directly
+    # via window.open() — this avoids CORS issues that arise when fetch()
+    # follows a cross-origin 302 redirect to B2/R2.
     r2_pdf_key = session.get("r2_pdf_key")
     if r2_pdf_key and storage.ENABLED:
         presigned = storage.get_presigned_url(r2_pdf_key, expires=300)
         if presigned:
-            from fastapi.responses import RedirectResponse
-            return RedirectResponse(presigned)
+            return {
+                "type": "redirect",
+                "url": presigned,
+                "filename": f"DMIT_Report_{session.get('subject_name') or session_id}.pdf",
+            }
 
-    # Fallback: serve from local filesystem
+    # Fallback: stream directly from local filesystem (local dev / no storage)
     report_path = session.get("report_path")
     if not report_path or not Path(report_path).exists():
         raise HTTPException(status_code=404, detail="Report not yet generated")
