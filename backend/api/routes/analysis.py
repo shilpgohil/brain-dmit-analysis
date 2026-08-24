@@ -907,6 +907,8 @@ def _complete_after_pdf(session_id: str, session: dict,
     session.pop("pdf_pending", None)
     session.pop("full_result", None)   # free the large raw payload
     session.pop("_pdf_task_started", None)
+    session.pop("_pdf_started_at", None)
+    session.pop("_pdf_attempts", None)
     persist_session(session_id)
 
 
@@ -1009,10 +1011,33 @@ async def get_analysis(
 
         # Worker finished the analysis; PDF assembly happens HERE on the
         # main API (matplotlib/reportlab live on this instance, not the worker).
-        if session.get("pdf_pending") and not session.get("_pdf_task_started"):
-            session["_pdf_task_started"] = True
-            persist_session(session_id)
-            background_tasks.add_task(asyncio.to_thread, _finalize_pdf_sync, session_id)
+        #
+        # Retry design: a timestamped start marker instead of a one-shot flag.
+        # If a PDF task crashes or the process is killed mid-render, the next
+        # poll after the 6-minute grace window re-triggers it (max 3 attempts,
+        # then the session completes with a warning instead of hanging forever).
+        if session.get("pdf_pending"):
+            attempts = int(session.get("_pdf_attempts") or 0)
+            started_at = session.get("_pdf_started_at")
+            stale = True
+            if isinstance(started_at, str):
+                try:
+                    elapsed = (datetime.now() - datetime.fromisoformat(started_at)).total_seconds()
+                    stale = elapsed > 360   # 6 min — generous for 0.1 CPU matplotlib render
+                except ValueError:
+                    stale = True
+            if stale:
+                if attempts >= 3:
+                    # Give up on the PDF — deliver the analysis without it.
+                    _complete_after_pdf(
+                        session_id, session, report_url=None,
+                        warning="Report generation timed out after multiple attempts.",
+                    )
+                else:
+                    session["_pdf_started_at"] = datetime.now().isoformat()
+                    session["_pdf_attempts"] = attempts + 1
+                    persist_session(session_id)
+                    background_tasks.add_task(asyncio.to_thread, _finalize_pdf_sync, session_id)
 
     if "result" in session:
         r = session["result"]
