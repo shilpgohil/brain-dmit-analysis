@@ -42,6 +42,20 @@ def init_store() -> None:
     for session_id, session in session_store.items():
         status = session.get("status")
         if isinstance(status, str) and status in _IN_FLIGHT_STATUSES:
+            # A PDF-pending session with a stored result is RECOVERABLE:
+            # the analysis itself is complete; the PDF retry logic in
+            # get_analysis re-triggers report generation on the next poll.
+            # Do NOT fail it — that would discard a finished analysis.
+            if (
+                status == "generating_report"
+                and session.get("pdf_pending")
+                and session.get("result")
+            ):
+                # Clear stale start markers so the retry fires immediately.
+                session.pop("_pdf_task_started", None)
+                session.pop("_pdf_started_at", None)
+                save_session(session_id, session)
+                continue
             session["status"] = "failed"
             session["error"] = "Analysis was interrupted by a server restart. Run the analysis again."
             for stage in session.get("pipeline_stages", []):
