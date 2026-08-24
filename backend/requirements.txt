@@ -9,10 +9,10 @@ python-multipart>=0.0.9     # multipart/form-data file uploads
 pydantic>=2.0.0
 
 # --- Image & fingerprint processing ---
-numpy>=1.26.0,<2.0.0          # NumPy 2.x has breaking API changes; pin to 1.x
-opencv-python-headless>=4.9.0,<5.0.0  # headless = same algorithms, no GUI; pin 4.x
-scipy>=1.12.0,<1.15.0         # signal processing, image topology
-Pillow>=10.0.0,<12.0.0        # image loading, resizing, thumbnail
+numpy>=1.26.0                 # NumPy 2.x is fine — wheels available for Python 3.14
+opencv-python-headless>=4.9.0  # headless = same algorithms, no GUI bindings (~80 MB saved)
+scipy>=1.15.0                 # 1.15+ has pre-built wheels for Python 3.14 (no gfortran needed)
+Pillow>=10.0.0                # image loading, resizing, thumbnail
 
 # --- Auth + QR ---
 python-jose[cryptography]>=3.3.0
