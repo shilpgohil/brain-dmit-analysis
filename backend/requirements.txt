@@ -27,6 +27,8 @@ passlib[bcrypt]>=1.7.4             # kept as optional dep; bcrypt is the direct 
 qrcode>=7.4.2
 pymupdf>=1.23.0             # PDF verification / page-count checks
 matplotlib>=3.8.0           # chart generation (gauge, radar, bar, pie)
+reportlab>=4.0.0            # PDF document generation (premium report) — REQUIRED;
+                            # its absence caused "name 'inch' is not defined" at runtime
 
 # --- AI Consultant ---
 openai>=1.30.0              # NVIDIA / Groq via OpenAI-compatible API
