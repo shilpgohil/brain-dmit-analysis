@@ -1,6 +1,20 @@
 """
 DMIT AI Consultant — widget spec builders.
 Produces rich structured UI component specs for the frontend.
+
+DATA SHAPE NOTES (AnalysisResult, serialised via model_dump):
+  quotients        → Dict with UPPERCASE keys: {"IQ": 0.78, "EQ": 0.65, ...}
+  career_matches   → List[{title, category, family, match_score, key_strengths}]
+  fingers          → List[{finger_id, finger_position, pattern_type, pattern_subtype,
+                           ridge_count, quality_score, ...}]
+  brain_lobes      → {prefrontal_lobe, posterior_frontal, parietal_lobe, temporal_lobe,
+                      occipital_lobe, left_hemisphere, right_hemisphere, dominant_hemisphere}
+  learning_styles  → {visual, auditory, kinesthetic}
+  personality      → {openness, conscientiousness, extraversion, agreeableness, neuroticism}
+  atd_analysis     → {left_hand: {angle_deg, range_category, interpretation, ...},
+                      right_hand: {...}, summary}
+  (AnalysisResult has NO swot / development_roadmap fields — those widgets
+   return None unless an older data shape provides them.)
 """
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
@@ -14,6 +28,15 @@ def _pct_val(v: Any) -> float:
         return round(f * 100, 1) if f <= 1.0 else round(f, 1)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _quotient_value(q: Dict, key: str) -> Optional[float]:
+    """Case-insensitive quotient lookup — engine emits UPPERCASE keys."""
+    for k in (key.upper(), key.lower()):
+        v = q.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return None
 
 
 def build_widget_spec(widget_key: str, session_data: Dict[str, Any]) -> Optional[Dict]:
@@ -74,7 +97,7 @@ def _score_grid_quotients(s: Dict) -> Optional[Dict]:
         return None
     items = []
     for key, meta in _QUOTIENT_META.items():
-        v = q.get(key)
+        v = _quotient_value(q, key)
         if v is not None:
             pct = _pct_val(v)
             items.append({
@@ -86,6 +109,8 @@ def _score_grid_quotients(s: Dict) -> Optional[Dict]:
                 "icon": meta["icon"],
                 "tier": _tier(pct),
             })
+    if not items:
+        return None
     return {
         "widget_type": "score_grid",
         "title": "10-Quotient Summary",
@@ -126,6 +151,8 @@ def _score_grid_mi(s: Dict) -> Optional[Dict]:
                 "icon": icons[i % len(icons)],
                 "tier": _tier(pct),
             })
+    if not items:
+        return None
     return {
         "widget_type": "score_grid",
         "title": "Multiple Intelligence Scores",
@@ -135,22 +162,26 @@ def _score_grid_mi(s: Dict) -> Optional[Dict]:
 
 
 def _career_cards(s: Dict) -> Optional[Dict]:
-    careers = s.get("careers") or []
+    careers = s.get("career_matches") or s.get("careers") or []
     if not careers:
         return None
     colors = ["#c4a574", "#9d8bb5", "#6b9e8f", "#b87d5c", "#8b9eb7", "#e8dcc8"]
     items = []
     for i, c in enumerate(careers[:6]):
-        title = c.get("career") or c.get("title") or c.get("name") or "Unknown"
-        pct   = _pct_val(c.get("suitability") or c.get("match_percentage") or c.get("suitability_pct"))
+        if not isinstance(c, dict):
+            continue
+        title = c.get("title") or c.get("career") or c.get("name") or "Unknown"
+        pct   = _pct_val(c.get("match_score") or c.get("suitability") or c.get("match_percentage"))
         items.append({
             "rank": i + 1,
             "title": title,
-            "family": c.get("family") or "General",
+            "family": c.get("family") or c.get("category") or "General",
             "suitability_pct": pct,
             "key_strengths": c.get("key_strengths") or [],
             "color": colors[i % len(colors)],
         })
+    if not items:
+        return None
     return {"widget_type": "career_cards", "title": "Your Top Career Matches", "items": items}
 
 
@@ -169,7 +200,7 @@ def _swot_matrix(s: Dict) -> Optional[Dict]:
 
 
 def _finger_map(s: Dict) -> Optional[Dict]:
-    fingers = s.get("finger_prints") or s.get("fingers") or []
+    fingers = s.get("fingers") or s.get("finger_prints") or []
     if not fingers:
         return None
     pattern_colors = {
@@ -178,17 +209,23 @@ def _finger_map(s: Dict) -> Optional[Dict]:
     }
     items = []
     for f in fingers:
+        if not isinstance(f, dict):
+            continue
+        fid = f.get("finger_id") or f.get("finger_position") or f.get("finger_name") or "?"
         pt = (f.get("pattern_type") or "unknown").lower()
+        hand = "Left" if str(fid).upper().startswith("L") else "Right"
         items.append({
-            "finger":       f.get("finger_name") or f.get("finger") or "Unknown",
-            "hand":         f.get("hand") or ("Left" if "l" in (f.get("finger_name") or "").lower() else "Right"),
+            "finger":       str(fid),
+            "hand":         hand,
             "pattern":      (f.get("pattern_type") or "Unknown").title(),
             "subtype":      f.get("pattern_subtype") or "",
-            "ridge_count":  f.get("ridge_count") or f.get("total_ridge_count"),
+            "ridge_count":  f.get("ridge_count"),
             "quality":      _pct_val(f.get("quality_score")),
             "lobe":         f.get("brain_lobe") or "",
             "color":        pattern_colors.get(pt, "#475569"),
         })
+    if not items:
+        return None
     return {"widget_type": "finger_map", "title": "Fingerprint Pattern Map", "fingers": items}
 
 
@@ -221,27 +258,32 @@ def _timeline(s: Dict) -> Optional[Dict]:
 
 
 def _stat_bar_lobes(s: Dict) -> Optional[Dict]:
-    brain = s.get("brain_analysis") or {}
-    lobes = brain.get("lobe_scores") or brain.get("lobes") or {}
-    if not lobes:
+    brain = s.get("brain_lobes") or s.get("brain_analysis") or {}
+    if not brain:
         return None
-    lobe_descriptions = {
-        "frontal": "Decision making, planning, personality",
-        "temporal": "Memory, language, auditory processing",
-        "parietal": "Spatial awareness, sensory integration",
-        "occipital": "Visual processing, pattern recognition",
-        "limbic": "Emotional regulation, motivation",
+    lobe_keys = {
+        "prefrontal_lobe":   "Executive function, planning, personality",
+        "posterior_frontal": "Logic, language production, reasoning",
+        "parietal_lobe":     "Spatial awareness, sensory integration",
+        "temporal_lobe":     "Memory, language, auditory processing",
+        "occipital_lobe":    "Visual processing, pattern recognition",
     }
     colors = ["#c4a574", "#9d8bb5", "#6b9e8f", "#b87d5c", "#8b9eb7"]
     items = []
-    for i, (k, v) in enumerate(lobes.items()):
-        items.append({
-            "label": k.replace("_", " ").title() + " Lobe",
-            "value": _pct_val(v),
-            "max": 100,
-            "color": colors[i % len(colors)],
-            "description": lobe_descriptions.get(k.lower().replace("_lobe", "").strip(), ""),
-        })
+    i = 0
+    for k, desc in lobe_keys.items():
+        v = brain.get(k)
+        if v is not None:
+            items.append({
+                "label": k.replace("_lobe", "").replace("_", " ").title(),
+                "value": _pct_val(v),
+                "max": 100,
+                "color": colors[i % len(colors)],
+                "description": desc,
+            })
+            i += 1
+    if not items:
+        return None
     return {"widget_type": "stat_bar_group", "title": "Brain Lobe Activity", "items": items}
 
 
@@ -255,11 +297,16 @@ def _trait_pills(s: Dict) -> Optional[Dict]:
     if swot.get("weaknesses"):
         groups.append({"category": "Development Areas", "color": "rose",
                        "items": list(swot["weaknesses"])[:4]})
-    comm = personality.get("communication_style")
-    lead = personality.get("leadership_style")
-    style_traits = [x for x in [comm, lead] if x]
-    if style_traits:
-        groups.append({"category": "Style Traits", "color": "plum", "items": style_traits})
+    # Derive trait pills from Big-Five when SWOT is absent (AnalysisResult has no swot)
+    if not groups and personality:
+        high = [(k.title(), _pct_val(v)) for k, v in personality.items()
+                if isinstance(v, (int, float)) and _pct_val(v) >= 65 and k != "neuroticism"]
+        if high:
+            groups.append({
+                "category": "Dominant Traits", "color": "gold",
+                "items": [f"{name} ({val:.0f}%)" for name, val in
+                          sorted(high, key=lambda x: x[1], reverse=True)[:5]],
+            })
     if not groups:
         return None
     return {"widget_type": "trait_pills", "title": "Personality Traits", "groups": groups}
@@ -279,6 +326,8 @@ def _mi_strength_ladder(s: Dict) -> Optional[Dict]:
         [(labels.get(k, k.title()), _pct_val(v)) for k, v in mi.items() if v is not None],
         key=lambda x: x[1], reverse=True,
     )
+    if not ranked:
+        return None
     colors = ["#c4a574", "#e8dcc8", "#9d8bb5", "#6b9e8f", "#b87d5c", "#8b9eb7", "#f59e0b", "#4ade80"]
     items = [
         {"rank": i+1, "intelligence": name, "value": val,
@@ -289,10 +338,14 @@ def _mi_strength_ladder(s: Dict) -> Optional[Dict]:
 
 
 def _learning_guide(s: Dict) -> Optional[Dict]:
-    ls = s.get("learning_style") or {}
+    ls = s.get("learning_styles") or s.get("learning_style") or {}
+    if not ls:
+        return None
     v  = _pct_val(ls.get("visual"))
     a  = _pct_val(ls.get("auditory"))
     k  = _pct_val(ls.get("kinesthetic"))
+    if v == 0 and a == 0 and k == 0:
+        return None
     primary = ls.get("primary_style") or ls.get("dominant") or (
         "Visual" if v >= a and v >= k else "Auditory" if a >= k else "Kinesthetic"
     )
@@ -310,18 +363,18 @@ def _learning_guide(s: Dict) -> Optional[Dict]:
 
 
 def _brain_summary(s: Dict) -> Optional[Dict]:
-    brain = s.get("brain_analysis") or {}
-    lh = _pct_val(brain.get("left_hemisphere_pct") or brain.get("left_pct"))
-    rh = _pct_val(brain.get("right_hemisphere_pct") or brain.get("right_pct"))
+    brain = s.get("brain_lobes") or s.get("brain_analysis") or {}
+    lh = _pct_val(brain.get("left_hemisphere") or brain.get("left_hemisphere_pct") or brain.get("left_pct"))
+    rh = _pct_val(brain.get("right_hemisphere") or brain.get("right_hemisphere_pct") or brain.get("right_pct"))
     if lh == 0 and rh == 0:
         return None
-    dominant = "Left" if lh >= rh else "Right"
+    dominant = brain.get("dominant_hemisphere") or ("Left" if lh >= rh else "Right")
     diff = abs(lh - rh)
     balance = "Balanced" if diff < 5 else f"{'Left' if lh > rh else 'Right'}-dominant"
     return {
         "widget_type": "brain_summary",
         "title": "Brain Architecture Overview",
-        "left_pct": lh, "right_pct": rh, "dominant": dominant,
+        "left_pct": lh, "right_pct": rh, "dominant": str(dominant).title(),
         "left_traits":  ["Logical thinking", "Language processing", "Sequential analysis", "Detail-oriented"],
         "right_traits": ["Creative expression", "Spatial awareness", "Intuitive reasoning", "Holistic thinking"],
         "balance_label": f"{balance} — {diff:.0f}% difference between hemispheres",
@@ -329,31 +382,54 @@ def _brain_summary(s: Dict) -> Optional[Dict]:
 
 
 def _atd_visual(s: Dict) -> Optional[Dict]:
-    atd = s.get("atd_analysis") or {}
+    atd = s.get("atd_analysis") or s.get("atd") or {}
     if not atd:
         return None
-    def _angle(key):
-        v = atd.get(f"{key}_angle") or atd.get(key)
-        try:
-            return round(float(v), 1)
-        except (TypeError, ValueError):
-            return None
-    la, ra = _angle("left"), _angle("right")
+
+    def _hand(key):
+        """AnalysisResult shape: atd_analysis.left_hand = {angle_deg, range_category, ...}"""
+        h = atd.get(key)
+        if isinstance(h, dict):
+            try:
+                return round(float(h.get("angle_deg")), 1), h
+            except (TypeError, ValueError):
+                return None, h
+        return None, None
+
+    la, lh_data = _hand("left_hand")
+    ra, rh_data = _hand("right_hand")
     if la is None and ra is None:
         return None
+
     def _status(angle):
-        if angle is None: return "N/A"
-        if 38 <= angle <= 50: return "Normal"
-        if angle < 38: return "Below Normal"
+        if angle is None:
+            return "N/A"
+        if 35 <= angle <= 46:
+            return "Normal"
+        if angle < 35:
+            return "Below Normal"
         return "Above Normal"
+
+    interp = atd.get("summary") or ""
+    if not interp and isinstance(rh_data, dict):
+        interp = rh_data.get("interpretation") or ""
+    if not interp:
+        interp = "ATD angle reflects tactile sensitivity and fine-motor coordination."
+
+    fm = None
+    ss = None
+    for h in (rh_data, lh_data):
+        if isinstance(h, dict):
+            fm = fm if fm is not None else h.get("fine_motor_capacity")
+            ss = ss if ss is not None else h.get("sensory_sensitivity")
+
     return {
         "widget_type": "atd_visual",
         "title": "ATD Angle Analysis",
         "left_angle": la, "right_angle": ra,
-        "normal_range_min": 38, "normal_range_max": 50,
+        "normal_range_min": 35, "normal_range_max": 46,
         "left_status": _status(la), "right_status": _status(ra),
-        "interpretation": atd.get("interpretation") or atd.get("summary") or
-            "ATD angle reflects tactile sensitivity and fine-motor coordination.",
-        "fine_motor_pct":       _pct_val(atd.get("fine_motor_score")),
-        "sensory_sensitivity_pct": _pct_val(atd.get("sensory_sensitivity")),
+        "interpretation": interp,
+        "fine_motor_pct": _pct_val(fm),
+        "sensory_sensitivity_pct": _pct_val(ss),
     }

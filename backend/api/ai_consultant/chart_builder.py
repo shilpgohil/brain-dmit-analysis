@@ -101,11 +101,19 @@ def _personality_radar(s: Dict) -> Optional[Dict]:
     }
 
 
+def _q_get(q: Dict, key: str):
+    """Case-insensitive quotient lookup — the engine emits UPPERCASE keys ('IQ')."""
+    v = q.get(key.upper())
+    if v is None:
+        v = q.get(key.lower())
+    return v
+
+
 def _quotients_radar(s: Dict) -> Optional[Dict]:
     q = s.get("quotients") or {}
     keys   = ["iq", "eq", "cq", "aq", "sq", "pq", "lq", "mq", "fq", "dq"]
     labels = ["IQ", "EQ", "CQ", "AQ", "SQ", "PQ", "LQ", "MQ", "FQ", "DQ"]
-    data = [_pct_val(q.get(k)) for k in keys]
+    data = [_pct_val(_q_get(q, k)) for k in keys]
     if not any(data):
         return None
     return {
@@ -117,12 +125,18 @@ def _quotients_radar(s: Dict) -> Optional[Dict]:
 
 
 def _brain_lobe_radar(s: Dict) -> Optional[Dict]:
-    brain = s.get("brain_analysis") or {}
-    lobes = brain.get("lobe_scores") or brain.get("lobes") or {}
+    brain = s.get("brain_lobes") or s.get("brain_analysis") or {}
+    if not brain:
+        return None
+    lobe_keys = ["prefrontal_lobe", "posterior_frontal", "parietal_lobe",
+                 "temporal_lobe", "occipital_lobe"]
+    lobes = {k: brain.get(k) for k in lobe_keys if brain.get(k) is not None}
+    if not lobes:
+        lobes = brain.get("lobe_scores") or brain.get("lobes") or {}
     if not lobes:
         return None
     keys   = list(lobes.keys())
-    labels = [k.replace("_", " ").title() for k in keys]
+    labels = [k.replace("_lobe", "").replace("_", " ").title() for k in keys]
     data   = [_pct_val(lobes[k]) for k in keys]
     return {
         "chart_type": "radar",
@@ -138,26 +152,24 @@ def _quotients_bar(s: Dict) -> Optional[Dict]:
     q = s.get("quotients") or {}
     keys   = ["iq", "eq", "cq", "aq", "sq", "pq", "lq", "mq", "fq", "dq"]
     labels = ["IQ", "EQ", "CQ", "AQ", "SQ", "PQ", "LQ", "MQ", "FQ", "DQ"]
-    data = [_pct_val(q.get(k)) for k in keys if q.get(k) is not None]
-    labels_f = [l for k, l in zip(keys, labels) if q.get(k) is not None]
-    if not data:
+    pairs = [(l, _q_get(q, k)) for k, l in zip(keys, labels)]
+    pairs = [(l, _pct_val(v)) for l, v in pairs if v is not None]
+    if not pairs:
         return None
-    colored = [{"label": l, "data": [d], "color": _PALETTE[i % len(_PALETTE)]}
-               for i, (l, d) in enumerate(zip(labels_f, data))]
     return {
         "chart_type": "bar",
         "title": "10-Quotient Profile",
         "x_label": "Quotient",
         "y_label": "Score (%)",
-        "labels": labels_f,
-        "datasets": [{"label": "Score", "data": data, "color": "#c4a574"}],
+        "labels": [p[0] for p in pairs],
+        "datasets": [{"label": "Score", "data": [p[1] for p in pairs], "color": "#c4a574"}],
     }
 
 
 def _brain_hemisphere_bar(s: Dict) -> Optional[Dict]:
-    brain = s.get("brain_analysis") or {}
-    lh = _pct_val(brain.get("left_hemisphere_pct") or brain.get("left_pct"))
-    rh = _pct_val(brain.get("right_hemisphere_pct") or brain.get("right_pct"))
+    brain = s.get("brain_lobes") or s.get("brain_analysis") or {}
+    lh = _pct_val(brain.get("left_hemisphere") or brain.get("left_hemisphere_pct") or brain.get("left_pct"))
+    rh = _pct_val(brain.get("right_hemisphere") or brain.get("right_hemisphere_pct") or brain.get("right_pct"))
     if lh == 0 and rh == 0:
         return None
     return {
@@ -256,7 +268,7 @@ def _learning_doughnut(s: Dict) -> Optional[Dict]:
 
 
 def _pattern_pie(s: Dict) -> Optional[Dict]:
-    fingers = s.get("finger_prints") or s.get("fingers") or []
+    fingers = s.get("fingers") or s.get("finger_prints") or []
     counts: Dict[str, int] = {}
     for f in fingers:
         pt = (f.get("pattern_type") or "unknown").lower()
@@ -287,7 +299,7 @@ def _mi_quotient_grouped(s: Dict) -> Optional[Dict]:
 
     q_map = {"iq": "IQ", "eq": "EQ", "cq": "CQ", "lq": "LQ", "mq": "MQ"}
     q_labels = list(q_map.values())
-    q_data   = [_pct_val(q.get(k)) for k in q_map]
+    q_data   = [_pct_val(_q_get(q, k)) for k in q_map]
 
     if not any(mi_data) and not any(q_data):
         return None
@@ -306,14 +318,25 @@ def _mi_quotient_grouped(s: Dict) -> Optional[Dict]:
 # ── Extension bar ─────────────────────────────────────────────────────────────
 
 def _extension_bar(s: Dict) -> Optional[Dict]:
-    ext = s.get("extension_results") or {}
-    if not ext:
-        return None
-    scored = sorted(
-        [(k.replace("_", " ").title(), _pct_val(v.get("primary_score") if isinstance(v, dict) else v))
-         for k, v in ext.items() if v is not None],
-        key=lambda x: x[1], reverse=True,
-    )[:10]
+    # AnalysisResult uses 'extensions' (list of {name, primary_score, ...});
+    # raw pipeline output uses 'extension_results' (dict).
+    scored = []
+    ext_list = s.get("extensions") or []
+    if isinstance(ext_list, list) and ext_list:
+        for e in ext_list:
+            if isinstance(e, dict) and e.get("primary_score") is not None:
+                name = (e.get("name") or "").replace("_", " ").title()
+                scored.append((name, _pct_val(e["primary_score"])))
+    else:
+        ext = s.get("extension_results") or {}
+        if not ext:
+            return None
+        scored = [
+            (k.replace("_", " ").title(),
+             _pct_val(v.get("primary_score") if isinstance(v, dict) else v))
+            for k, v in ext.items() if v is not None
+        ]
+    scored = sorted(scored, key=lambda x: x[1], reverse=True)[:10]
     if not scored:
         return None
     labels = [x[0] for x in scored]
@@ -330,7 +353,7 @@ def _extension_bar(s: Dict) -> Optional[Dict]:
 # ── Brain split bar (L + R hemispheres side by side per lobe) ─────────────────
 
 def _brain_split_bar(s: Dict) -> Optional[Dict]:
-    brain = s.get("brain_analysis") or {}
+    brain = s.get("brain_lobes") or s.get("brain_analysis") or {}
     lobes = brain.get("lobe_hemispheres") or {}
     if not lobes:
         # Fall back to simple hemisphere bar
@@ -357,15 +380,15 @@ def _brain_split_bar(s: Dict) -> Optional[Dict]:
 # ── Ridge count bar ──────────────────────────────────────────────────────────
 
 def _ridge_count_bar(s: Dict) -> Optional[Dict]:
-    fingers = s.get("finger_prints") or s.get("fingers") or []
+    fingers = s.get("fingers") or s.get("finger_prints") or []
     if not fingers:
         return None
     labels, data = [], []
     for f in fingers:
         trc = f.get("ridge_count") or f.get("total_ridge_count")
         if trc is not None:
-            name = f.get("finger_name") or f.get("finger") or "?"
-            labels.append(name[:8])
+            name = f.get("finger_id") or f.get("finger_position") or f.get("finger_name") or "?"
+            labels.append(str(name)[:8])
             data.append(float(trc))
     if not data:
         return None

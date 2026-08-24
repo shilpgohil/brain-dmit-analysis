@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
-import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Plus, Send, Loader2, Sparkles,
@@ -877,20 +876,22 @@ export default function ChatPage() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -270, opacity: 0 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="w-[250px] flex-shrink-0 flex flex-col relative z-10 lg:relative fixed left-0 top-0 bottom-0"
+              className="w-[280px] max-w-[85vw] lg:w-[250px] flex-shrink-0 flex flex-col z-20 lg:z-10 lg:relative fixed left-0 top-0 bottom-0"
               style={{ borderRight: `1px solid ${GOLD.border}`, background: "rgba(4,4,15,0.97)", backdropFilter: "blur(24px)" }}
             >
-              {/* Sidebar header */}
+              {/* Sidebar header — no logo here (the main nav above already
+                  carries the brand logo; duplicating it looked cluttered).
+                  This is the consultant's identity block instead. */}
               <div className="flex items-center justify-between px-4 py-3.5 flex-shrink-0"
                 style={{ borderBottom: `1px solid ${GOLD.border}` }}>
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl overflow-hidden flex-shrink-0 relative"
-                    style={{ border: `1px solid ${GOLD.border}`, background: "rgba(196,165,116,0.07)" }}>
-                    <Image src="/images/logo.png" alt="DMIT" fill className="object-contain p-0.5" />
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ border: `1px solid ${GOLD.border}`, background: "linear-gradient(135deg, rgba(196,165,116,0.15), rgba(157,139,181,0.10))" }}>
+                    <MessageSquare className="w-4 h-4" style={{ color: GOLD.primary }} />
                   </div>
                   <div>
-                    <p className="text-[12px] font-semibold text-white/85 leading-none">DMIT Insight</p>
-                    <p className="text-[8px] text-white/25 font-mono mt-0.5">AI Consultant</p>
+                    <p className="text-[12px] font-semibold text-white/85 leading-none">AI Consultant</p>
+                    <p className="text-[8px] text-white/25 font-mono mt-0.5 uppercase tracking-wider">DMIT Advisory</p>
                   </div>
                 </div>
                 <button type="button" onClick={() => setSidebarOpen(false)}
@@ -986,16 +987,10 @@ export default function ChatPage() {
               </button>
             )}
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg overflow-hidden flex-shrink-0 relative"
-                style={{ border: `1px solid ${GOLD.border}`, background: "rgba(196,165,116,0.06)" }}>
-                <Image src="/images/logo.png" alt="DMIT" fill className="object-contain p-0.5" />
-              </div>
-              <div className="flex items-center gap-2">
-                <p className="text-[12px] font-medium text-white/80">DMIT Insight</p>
-                {threadTitle && (
-                  <span className="hidden sm:block text-[10px] text-white/25 font-mono">· {threadTitle}</span>
-                )}
-              </div>
+              <p className="text-[12px] font-medium text-white/80">AI Consultant</p>
+              {threadTitle && (
+                <span className="hidden sm:block text-[10px] text-white/25 font-mono">· {threadTitle}</span>
+              )}
             </div>
             {isLoading && (
               <div className="flex items-center gap-1.5 text-[10px] font-mono"
@@ -1021,10 +1016,13 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Messages scroll area */}
+        {/* Messages scroll area.
+            min-h-0 is REQUIRED: inside a flex column, a child's implicit
+            min-height:auto prevents it from shrinking below its content, so
+            overflow-y-auto never engages and the mouse wheel appears dead. */}
         <div
           ref={scrollAreaRef}
-          className="flex-1 overflow-y-auto"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
           style={{ scrollbarWidth: "thin", scrollbarColor: `rgba(196,165,116,0.15) transparent` }}
         >
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-6 pb-4">
@@ -1032,11 +1030,11 @@ export default function ChatPage() {
             {isEmpty && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }} className="pt-6 text-center">
-                <div className="w-16 h-16 rounded-2xl mx-auto mb-5 overflow-hidden relative"
-                  style={{ border: `1px solid ${GOLD.border}`, background: "rgba(196,165,116,0.05)" }}>
-                  <Image src="/images/logo.png" alt="DMIT Insight" fill className="object-contain p-1.5" />
+                <div className="w-16 h-16 rounded-2xl mx-auto mb-5 flex items-center justify-center"
+                  style={{ border: `1px solid ${GOLD.border}`, background: "linear-gradient(135deg, rgba(196,165,116,0.12), rgba(157,139,181,0.08))" }}>
+                  <MessageSquare className="w-7 h-7" style={{ color: GOLD.primary }} />
                 </div>
-                <h2 className="text-xl font-semibold text-white/85 mb-2">DMIT Insight</h2>
+                <h2 className="text-xl font-semibold text-white/85 mb-2">AI Consultant</h2>
                 <p className="text-[13px] text-white/30 mb-8 max-w-md mx-auto leading-relaxed">
                   Your personalised AI counsellor for {candidateName}.
                   Ask anything about intelligence, careers, brain patterns, or development.
@@ -1065,9 +1063,9 @@ export default function ChatPage() {
                 className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start gap-3")}>
                 {/* AI avatar */}
                 {msg.role === "assistant" && (
-                  <div className="w-7 h-7 rounded-xl overflow-hidden flex-shrink-0 mt-1 relative self-start"
-                    style={{ border: `1px solid ${GOLD.border}`, background: "rgba(196,165,116,0.06)" }}>
-                    <Image src="/images/logo.png" alt="AI" fill className="object-contain p-1" />
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 mt-1 self-start"
+                    style={{ border: `1px solid ${GOLD.border}`, background: "rgba(196,165,116,0.08)" }}>
+                    <MessageSquare className="w-3.5 h-3.5" style={{ color: `${GOLD.primary}cc` }} />
                   </div>
                 )}
 

@@ -18,7 +18,7 @@ import { GOLD } from "@/lib/analysis-theme";
 import { cn, fingerLabel, fingerRouteKey, formatRidgeCount } from "@/lib/utils";
 import {
   Download, RefreshCw, AlertCircle, Fingerprint,
-  Loader2, Clock, User, Layers, Sparkles,
+  Loader2, Clock, User, Layers, MessageSquare,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
@@ -182,10 +182,10 @@ function AnalysisPageContent() {
                 <Link href={`/analysis/${id}/chat`}>
                   <MagneticButton
                     size="sm"
-                    icon={<Sparkles className="w-3.5 h-3.5" />}
+                    icon={<MessageSquare className="w-3.5 h-3.5" />}
                     className="text-[#0a0a12] font-semibold"
                   >
-                    DMIT Insight
+                    AI Consultant
                   </MagneticButton>
                 </Link>
               )}
