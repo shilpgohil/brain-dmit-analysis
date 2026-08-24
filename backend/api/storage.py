@@ -102,6 +102,25 @@ def download_to_temp(key: str, suffix: str = "") -> Optional[Path]:
         return None
 
 
+def download_to_file(key: str, dest: Path) -> bool:
+    """
+    Download object *key* to an exact destination path, preserving the
+    filename. The DMIT pipeline reads the finger slot (R1..L5, LPALM/RPALM)
+    from the filename, so random temp names (download_to_temp) silently break
+    finger identification. Returns True on success.
+    """
+    if not ENABLED:
+        return False
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        _client().download_file(BUCKET, key, str(dest))
+        return True
+    except Exception as _e:
+        import logging as _log
+        _log.getLogger(__name__).warning("Storage download failed for key %s: %s", key, _e)
+        return False
+
+
 def delete_prefix(prefix: str) -> None:
     """Delete all objects whose key starts with *prefix*."""
     if not ENABLED:

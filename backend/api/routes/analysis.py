@@ -545,10 +545,15 @@ def _run_pipeline_sync(
                 r2_key = "/".join(parts[idx:]).replace("\\", "/")
             else:
                 r2_key = f"uploads/{session_id}/{local.name}"
-            tmp = storage.download_to_temp(r2_key, suffix=local.suffix)
-            if tmp:
-                _temp_paths.append(tmp)
-                return str(tmp)
+            # QUALITY-CRITICAL: download with the ORIGINAL filename preserved.
+            # The pipeline identifies the finger slot (R1..L5, LPALM/RPALM)
+            # from the filename — random temp names (download_to_temp) made
+            # every finger "UNKNOWN" and broke cross-lateral brain mapping.
+            import tempfile as _tf
+            dest = Path(_tf.gettempdir()) / f"dmit_{session_id}" / local.name
+            if storage.download_to_file(r2_key, dest):
+                _temp_paths.append(dest)
+                return str(dest)
             return local_path_str  # fallback – pipeline will fail if file absent
 
         image_paths = [_ensure_local(p, "") for p in image_paths]

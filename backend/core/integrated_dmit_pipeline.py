@@ -642,7 +642,13 @@ class IntegratedDMITPipeline:
     def _atd_hand(self, slot: str, hand: str, manual_angle: Optional[float]) -> Optional[Dict[str, Any]]:
         image_path = self._palm_images.get(slot)
         if image_path:
-            estimate = self.palm_atd.estimate(image_path, hand=hand)
+            # Palm ATD is optional enrichment — an estimator crash must NEVER
+            # take down an otherwise-successful 10-finger analysis.
+            try:
+                estimate = self.palm_atd.estimate(image_path, hand=hand)
+            except Exception:
+                logger.exception("Palm atd estimation crashed for %s — continuing without it", image_path)
+                estimate = None
             if estimate is not None:
                 mapped = map_atd_angle(estimate['angle_deg'])
                 if mapped is not None:
