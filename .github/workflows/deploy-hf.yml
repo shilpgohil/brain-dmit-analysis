@@ -1,0 +1,49 @@
+name: Deploy backend to Hugging Face Space
+
+# Auto-deploys the backend/ folder to a Hugging Face Docker Space on every
+# push to main — the same "push to deploy" experience as Vercel/Render.
+#
+# Setup (one-time):
+#   1. Create a Hugging Face account (email only, no card): https://huggingface.co
+#   2. Create a WRITE token: Settings → Access Tokens → New token (type: Write)
+#   3. Create a Docker Space (or let the first push create it)
+#   4. Add two GitHub repository secrets:
+#        HF_TOKEN  — the write token
+#        HF_SPACE  — the space id, e.g.  yourusername/dmit-api
+#   5. Push to main — this workflow force-pushes backend/ to the Space,
+#      and HF builds the Dockerfile automatically.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-hf.yml"
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Push backend/ to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ secrets.HF_SPACE }}
+        run: |
+          cd backend
+
+          # Strip local artifacts that must not reach the Space
+          rm -rf data __pycache__ .venv
+          find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+          git init -b main
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add .
+          git commit -m "Deploy from GitHub ${GITHUB_SHA::8}"
+          git push -f "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" main
