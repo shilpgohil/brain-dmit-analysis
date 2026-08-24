@@ -104,10 +104,26 @@ if DATABASE_URL:
             return _Cursor(cur)
 
         def executescript(self, script: str) -> None:
-            """Execute a ';'-separated batch of DDL/DML statements."""
-            for stmt in script.split(";"):
+            """
+            Execute a ';'-separated batch of DDL/DML statements.
+
+            Bug fix: strip ALL SQL line comments (-- ...) from the entire
+            script BEFORE splitting on ';'.  Without this, a statement like:
+
+                -- ── Admins ─────────────────
+                CREATE TABLE IF NOT EXISTS admins ( ... )
+
+            would be joined as one split-piece whose stripped form starts with
+            '--', causing the CREATE TABLE to be SILENTLY SKIPPED.  This left
+            'admins' non-existent when 'plans' tried to reference it, producing
+            "relation admins does not exist".
+            """
+            import re
+            # Remove all -- line comments first so they don't interfere with splitting
+            clean = re.sub(r"--[^\n]*", "", script)
+            for stmt in clean.split(";"):
                 stmt = stmt.strip()
-                if not stmt or stmt.startswith("--"):
+                if not stmt:
                     continue
                 pg = _to_pg(stmt)
                 if pg:
