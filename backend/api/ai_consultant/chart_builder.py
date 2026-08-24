@@ -169,13 +169,21 @@ def _brain_hemisphere_bar(s: Dict) -> Optional[Dict]:
 
 
 def _brain_lobes_bar(s: Dict) -> Optional[Dict]:
-    brain = s.get("brain_analysis") or {}
-    lobes = brain.get("lobe_scores") or brain.get("lobes") or {}
+    # AnalysisResult uses 'brain_lobes' (BrainLobeCapacity); older code used 'brain_analysis'
+    brain = s.get("brain_lobes") or s.get("brain_analysis") or {}
+    if not brain:
+        return None
+    lobe_keys = ["prefrontal_lobe", "posterior_frontal", "parietal_lobe",
+                 "temporal_lobe", "occipital_lobe"]
+    lobes = {k.replace("_lobe","").replace("_"," ").title(): brain.get(k)
+             for k in lobe_keys if brain.get(k) is not None}
+    if not lobes:
+        # fallback for older format
+        lobes = brain.get("lobe_scores") or brain.get("lobes") or {}
     if not lobes:
         return None
-    labels = [k.replace("_", " ").title() for k in lobes]
+    labels = [k.replace("_", " ").title() if "_" in k else k for k in lobes]
     data   = [_pct_val(v) for v in lobes.values()]
-    colors = _PALETTE[:len(data)]
     return {
         "chart_type": "bar",
         "title": "Brain Lobe Dominance",
@@ -187,15 +195,16 @@ def _brain_lobes_bar(s: Dict) -> Optional[Dict]:
 
 
 def _career_hbar(s: Dict) -> Optional[Dict]:
-    careers = s.get("careers") or []
+    # AnalysisResult uses 'career_matches'; older formats use 'careers'
+    careers = s.get("career_matches") or s.get("careers") or []
     if not careers:
         return None
     top = careers[:8]
     labels = []
     data   = []
     for c in top:
-        title = c.get("career") or c.get("title") or c.get("name") or "Unknown"
-        pct = _pct_val(c.get("suitability") or c.get("match_percentage") or c.get("suitability_pct"))
+        title = c.get("title") or c.get("career") or c.get("name") or "Unknown"
+        pct = _pct_val(c.get("match_score") or c.get("suitability") or c.get("match_percentage"))
         labels.append(title)
         data.append(pct)
     return {
@@ -231,7 +240,7 @@ def _mi_ranked_hbar(s: Dict) -> Optional[Dict]:
 # ── Doughnut / pie ────────────────────────────────────────────────────────────
 
 def _learning_doughnut(s: Dict) -> Optional[Dict]:
-    ls = s.get("learning_style") or {}
+    ls = s.get("learning_styles") or s.get("learning_style") or {}
     v = _pct_val(ls.get("visual"))
     a = _pct_val(ls.get("auditory"))
     k = _pct_val(ls.get("kinesthetic"))
