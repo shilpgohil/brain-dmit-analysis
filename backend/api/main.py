@@ -54,34 +54,39 @@ if not get_admin_by_email(_admin_email):
     _log.getLogger(__name__).info(f"Admin seeded: {_admin_email}")
 
 # ---------------------------------------------------------------------------
-# Pre-import heavy pipeline modules at startup so health checks are instant.
-# Python caches modules after first import — subsequent calls cost nothing.
+# Component availability check — WITHOUT importing anything.
+#
+# CRITICAL for memory-constrained hosts (Render free tier = 512 MB):
+# actually importing the pipeline loads OpenCV + NumPy + SciPy + matplotlib +
+# reportlab + all 50 extension modules = ~330 MB, putting baseline memory at
+# ~480/512 MB. Any subsequent request allocation (multipart parse, boto3
+# import) then trips the OOM killer → every upload 502s.
+#
+# importlib.util.find_spec only reads package METADATA — it never executes
+# module code, so it costs ~0 MB. The heavy imports happen lazily inside
+# _run_pipeline_sync() only when an analysis actually runs.
 # ---------------------------------------------------------------------------
 _components: dict = {}
 
-def _warm_imports():
-    try:
-        from optimized_feature_extractor_clean import OptimizedFeatureExtractor  # noqa: F401
-        _components["feature_extractor"] = True
-    except Exception:
-        _components["feature_extractor"] = False
-    try:
-        from dmit_intelligence_mapper import map_features_to_dmit_profile  # noqa: F401
-        _components["intelligence_mapper"] = True
-    except Exception:
-        _components["intelligence_mapper"] = False
-    try:
-        from dmit_extensions.engine import DMITExtensionsEngine  # noqa: F401
-        _components["extensions_engine"] = True
-    except Exception:
-        _components["extensions_engine"] = False
-    try:
-        from premium_pdf_report import PremiumReportGenerator  # noqa: F401
-        _components["pdf_generator"] = True
-    except Exception:
-        _components["pdf_generator"] = False
+def _check_components():
+    import importlib.util
 
-_warm_imports()
+    def _has(module_name: str) -> bool:
+        try:
+            return importlib.util.find_spec(module_name) is not None
+        except Exception:
+            return False
+
+    # IMPORTANT: only TOP-LEVEL names here. find_spec on a dotted name
+    # (e.g. "dmit_extensions.engine") imports the parent package, and
+    # dmit_extensions/__init__.py pulls in the entire engine — defeating
+    # the whole point of this zero-memory check.
+    _components["feature_extractor"]   = _has("optimized_feature_extractor_clean")
+    _components["intelligence_mapper"] = _has("dmit_intelligence_mapper")
+    _components["extensions_engine"]   = _has("dmit_extensions")
+    _components["pdf_generator"]       = _has("premium_pdf_report")
+
+_check_components()
 
 _cors_origins = [
     o.strip()
