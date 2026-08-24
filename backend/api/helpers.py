@@ -60,6 +60,11 @@ def validate_image_upload(filename: str, content: bytes) -> Tuple[bool, str]:
     """
     Reject unsupported or unreadable uploads before they enter the pipeline.
     Returns (ok, error_message).
+
+    Uses PIL for validation — it only reads the image header/metadata without
+    decoding all pixel data, using ~1 MB per image instead of the ~50 MB that
+    cv2.imdecode requires.  This prevents OOM kills on memory-constrained hosts
+    (e.g. Render free tier) when a batch of 10-12 images arrives in one POST.
     """
     if not filename or not filename.strip():
         return False, "Upload filename is missing."
@@ -72,25 +77,19 @@ def validate_image_upload(filename: str, content: bytes) -> Tuple[bool, str]:
     if not content:
         return False, f"File '{filename}' is empty."
 
-    # Palm photos can be large; fingerprint scanner BMPs are typically < 2 MB.
     if len(content) > 8 * 1024 * 1024:
-        return False, f"File '{filename}' exceeds the 8 MB upload limit. Please compress the image first."
+        return False, f"File '{filename}' exceeds the 8 MB upload limit."
 
     try:
-        import cv2
-        import numpy as np
-
-        arr = np.frombuffer(content, dtype=np.uint8)
-        img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
-        if img is None:
-            return False, (
-                f"Could not read image '{filename}'. "
-                "The file may be corrupt or use an unsupported encoding."
-            )
-        if img.ndim < 2 or img.shape[0] < 32 or img.shape[1] < 32:
+        from PIL import Image
+        import io
+        # Image.open + getmime/size reads only the header — does NOT decode pixels
+        with Image.open(io.BytesIO(content)) as img:
+            w, h = img.size
+        if w < 32 or h < 32:
             return False, f"Image '{filename}' is too small to analyze (minimum 32×32 px)."
     except Exception as exc:
-        return False, f"Failed to validate '{filename}': {exc}"
+        return False, f"Could not read image '{filename}'. The file may be corrupt: {exc}"
 
     return True, ""
 
