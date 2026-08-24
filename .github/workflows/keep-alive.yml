@@ -11,14 +11,11 @@ name: Keep Render backend awake
 #   1. Deploy the backend on Render and note the service URL.
 #   2. Add a GitHub repository secret named RENDER_BACKEND_URL with the value
 #      e.g.  https://dmit-api.onrender.com
-#   3. Push this file to the default branch — the schedule starts automatically.
-#
-# The workflow also accepts manual triggers (workflow_dispatch) so you can
-# test it from the GitHub Actions tab without waiting for the cron.
+#   3. The schedule starts automatically on the next cron tick.
 
 on:
-  # DISABLED: schedule:
-  #   - cron: "*/10 * * * *"   # every 10 minutes, 24 × 7
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes, 24 × 7
   workflow_dispatch: {}       # manual trigger from GitHub Actions UI
 
 jobs:
@@ -30,8 +27,6 @@ jobs:
     steps:
       - name: Wake up Render backend
         run: |
-          # --retry covers the case where the ping itself wakes a sleeping
-          # instance (first attempt can time out while Render boots it up).
           curl --silent --show-error --fail \
             --max-time 60 \
             --retry 3 \
