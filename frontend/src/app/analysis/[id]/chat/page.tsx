@@ -847,8 +847,15 @@ export default function ChatPage() {
   const isEmpty = messages.length === 0;
   const streamingMsg = messages.find((m) => m.isStreaming);
 
+  // The nav bar is 56px tall (h-14). The chat UI sits below it.
+  // We use CSS var so the height is exact on every device.
+  const NAV_H = 56;
+
   return (
-    <div className="fixed inset-0 flex overflow-hidden" style={{ background: "#020208", top: 56 }}>
+    <div
+      className="fixed left-0 right-0 bottom-0 flex overflow-hidden"
+      style={{ background: "#020208", top: NAV_H }}
+    >
       {/* Ambient background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full opacity-[0.03]"
@@ -866,18 +873,22 @@ export default function ChatPage() {
       <AnimatePresence>
         {sidebarOpen && (
           <>
-            {/* Mobile scrim */}
-            <motion.div className="fixed inset-0 bg-black/50 z-[5] lg:hidden"
+            {/* Mobile scrim — covers only the chat area (below the nav) */}
+            <motion.div
+              className="absolute inset-0 bg-black/60 z-[15] lg:hidden"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setSidebarOpen(false)} />
+              onClick={() => setSidebarOpen(false)}
+            />
 
             <motion.aside
-              initial={{ x: -270, opacity: 0 }}
+              initial={{ x: -280, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -270, opacity: 0 }}
-              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="w-[280px] max-w-[85vw] lg:w-[250px] flex-shrink-0 flex flex-col z-20 lg:z-10 lg:relative fixed left-0 top-0 bottom-0"
-              style={{ borderRight: `1px solid ${GOLD.border}`, background: "rgba(4,4,15,0.97)", backdropFilter: "blur(24px)" }}
+              exit={{ x: -280, opacity: 0 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              className="w-[280px] max-w-[85vw] lg:w-[250px] flex-shrink-0 flex flex-col
+                         absolute left-0 top-0 bottom-0
+                         lg:relative lg:z-auto z-[20]"
+              style={{ borderRight: `1px solid ${GOLD.border}`, background: "rgba(4,4,15,0.98)", backdropFilter: "blur(24px)" }}
             >
               {/* Sidebar header — no logo here (the main nav above already
                   carries the brand logo; duplicating it looked cluttered).
@@ -974,11 +985,11 @@ export default function ChatPage() {
       </AnimatePresence>
 
       {/* ── Main area ──────────────────────────────────────────────────────── */}
-      {/* min-h-0 is REQUIRED here too: in a flex column, every intermediate
-          flex ancestor needs min-h-0 for overflow-y-auto to work at any depth.
-          Without it the column expands to match content and the child scroll
-          div has infinite height — the mouse wheel sees nothing to scroll. */}
-      <div className="flex-1 min-h-0 flex flex-col min-w-0 relative z-10 overflow-hidden">
+      {/* Every flex ancestor in a column needs min-h-0 so overflow-y-auto
+          actually creates a bounded scroll region (otherwise flex children
+          grow to content height → the scroll container has infinite height →
+          no scrolling on any device). overflow-hidden clips the column. */}
+      <div className="flex-1 min-h-0 flex flex-col min-w-0 overflow-hidden relative z-10">
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 h-12 flex-shrink-0"
           style={{ borderBottom: `1px solid ${GOLD.border}`, background: "rgba(4,4,15,0.7)", backdropFilter: "blur(12px)" }}>
@@ -1020,14 +1031,20 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Messages scroll area.
-            min-h-0 is REQUIRED: inside a flex column, a child's implicit
-            min-height:auto prevents it from shrinking below its content, so
-            overflow-y-auto never engages and the mouse wheel appears dead. */}
+        {/* Messages scroll area — must have:
+            • flex-1 min-h-0   → bounded height inside the flex column
+            • overflow-y-auto  → creates the actual scroll container
+            • -webkit-overflow-scrolling: touch → enables momentum scroll on iOS Safari
+            overscroll-behavior: contain → prevents page scroll bleed-through */}
         <div
           ref={scrollAreaRef}
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
-          style={{ scrollbarWidth: "thin", scrollbarColor: `rgba(196,165,116,0.15) transparent` }}
+          className="flex-1 min-h-0 overflow-y-auto"
+          style={{
+            scrollbarWidth: "thin",
+            scrollbarColor: "rgba(196,165,116,0.15) transparent",
+            WebkitOverflowScrolling: "touch",
+            overscrollBehavior: "contain",
+          }}
         >
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-6 pb-4">
             {/* Empty state */}
