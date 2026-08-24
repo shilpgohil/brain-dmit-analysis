@@ -159,6 +159,28 @@ async def health_check():
     )
 
 
+@app.get("/api/health/storage")
+async def storage_health():
+    """Test B2/R2 storage connectivity — upload a tiny probe file and delete it."""
+    from api import storage
+    if not storage.ENABLED:
+        return {"storage": "disabled", "detail": "No storage credentials configured — using local filesystem."}
+    import tempfile, pathlib
+    probe = pathlib.Path(tempfile.mktemp(suffix=".txt"))
+    try:
+        probe.write_text("dmit-storage-probe")
+        key = "_health/probe.txt"
+        url = storage.upload_file(probe, key)
+        storage.delete_prefix(key)
+        probe.unlink(missing_ok=True)
+        if url == "":
+            return {"storage": "connected", "provider": storage._ENDPOINT_URL, "public_url": "not configured", "bucket": storage.BUCKET}
+        return {"storage": "connected", "provider": storage._ENDPOINT_URL, "url": url, "bucket": storage.BUCKET}
+    except Exception as e:
+        probe.unlink(missing_ok=True)
+        return {"storage": "error", "provider": storage._ENDPOINT_URL, "detail": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api.main:app", host="0.0.0.0", port=8001, reload=True)
