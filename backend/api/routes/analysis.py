@@ -1020,47 +1020,22 @@ async def get_analysis(
         raise HTTPException(status_code=403, detail="Access denied")
 
     # ── Split-service mode: sync worker progress from the shared database ──
+    # The worker writes pipeline stage updates and final results directly to
+    # Neon. This process reads them on every poll until the session is complete.
+    # Once pdf_pending appears it means the worker hit a legacy defer path —
+    # give up on PDF and complete immediately (new worker code never defers).
     if session.get("delegated_to_worker") and session.get("status") in _IN_FLIGHT:
-        # Only reload from the DB while the WORKER is the writer (i.e. before
-        # pdf_pending lands in our memory). Once the PDF phase starts, this
-        # process owns the session — re-parsing the multi-MB session JSON on
-        # every 2-second poll would burn the little CPU the render thread has.
-        if not session.get("pdf_pending"):
-            from api.store import refresh_session_from_db
-            refresh_session_from_db(session_id)
-            session = session_store[session_id]
+        from api.store import refresh_session_from_db
+        refresh_session_from_db(session_id)
+        session = session_store[session_id]
 
-        # Worker finished the analysis; PDF assembly happens HERE on the
-        # main API (matplotlib/reportlab live on this instance, not the worker).
-        #
-        # Retry design: a timestamped start marker instead of a one-shot flag.
-        # If a PDF task crashes or the process is killed mid-render, a poll
-        # after the 15-minute grace window re-triggers it (max 3 attempts,
-        # then the session completes with a warning instead of hanging forever).
-        # The 15-min window matters: a render takes 4-7 min on a 0.1-CPU
-        # instance, and retrying while one is still running doubles memory.
-        if session.get("pdf_pending") and session_id not in _PDF_RENDERING:
-            attempts = int(session.get("_pdf_attempts") or 0)
-            started_at = session.get("_pdf_started_at")
-            stale = True
-            if isinstance(started_at, str):
-                try:
-                    elapsed = (datetime.now() - datetime.fromisoformat(started_at)).total_seconds()
-                    stale = elapsed > 900   # 15 min
-                except ValueError:
-                    stale = True
-            if stale:
-                if attempts >= 3:
-                    # Give up on the PDF — deliver the analysis without it.
-                    _complete_after_pdf(
-                        session_id, session, report_url=None,
-                        warning="Report generation timed out after multiple attempts.",
-                    )
-                else:
-                    session["_pdf_started_at"] = datetime.now().isoformat()
-                    session["_pdf_attempts"] = attempts + 1
-                    persist_session(session_id)
-                    background_tasks.add_task(asyncio.to_thread, _finalize_pdf_sync, session_id)
+        # Legacy: a session from the old deferred-PDF architecture.
+        # Mark it complete without a PDF so it stops spinning.
+        if session.get("pdf_pending"):
+            _complete_after_pdf(
+                session_id, session, report_url=None,
+                warning="Report was generated on a previous architecture. Re-run analysis to get the PDF.",
+            )
 
     if "result" in session:
         r = session["result"]

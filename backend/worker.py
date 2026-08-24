@@ -77,9 +77,15 @@ async def analyze(
 
 def _run_job(job: AnalyzeJob) -> None:
     """
-    Execute the pipeline in this process.
-    defer_pdf=True → analysis only; the main API assembles the PDF from the
-    persisted raw output (keeps matplotlib/reportlab off this instance).
+    Execute the full analysis pipeline INCLUDING PDF generation in this process.
+
+    Architecture rationale: the worker runs on a dedicated free-tier instance
+    with its own 750 h/month. After fingerprint analysis completes, the large
+    OpenCV/numpy arrays are garbage-collected. matplotlib+reportlab are already
+    resident from the pipeline's chart code. At PDF time the worker's live
+    footprint is ~250 MB, leaving ~260 MB headroom — enough for the 19-section
+    premium report. The main API's 0.1-CPU shared instance cannot reliably
+    render the report (OOM), so we no longer defer PDF to it.
     """
     from api.routes.analysis import _run_pipeline_sync
 
@@ -88,7 +94,7 @@ def _run_job(job: AnalyzeJob) -> None:
             job.session_id,
             use_preprocessing=job.use_preprocessing,
             generate_pdf=job.generate_pdf,
-            defer_pdf=True,
+            defer_pdf=False,   # worker generates the PDF itself
         )
     except Exception:
         logger.exception("Worker job failed for session %s", job.session_id)

@@ -33,13 +33,14 @@ GROQ_API_KEY    = os.getenv("GROQ_API_KEY",    "")
 GROQ_BASE_URL   = "https://api.groq.com/openai/v1"
 
 # Groq model chain — tried in order.
-# llama-3.3-70b is the most capable; 8b-instant has higher TPM so survives bursts.
+# VERIFIED live against /v1/models on this key (2026-08-24). All llama-3.x
+# chat models are decommissioned on Groq — do not use them.
 GROQ_MODELS = [
-    "llama-3.3-70b-versatile",   # best quality, 30 RPM / 6k TPM
-    "llama-3.1-70b-versatile",   # same quality tier, separate quota bucket
-    "llama-3.1-8b-instant",      # lower quality but 30 RPM / 20k TPM — handles bursts
+    "openai/gpt-oss-120b",   # primary — most capable live model on this key
+    "qwen/qwen3.6-27b",      # secondary — separate quota bucket
+    "openai/gpt-oss-20b",    # fast fallback
 ]
-GROQ_FAST_MODEL = "llama-3.1-8b-instant"   # used for titles/JSON — fastest
+GROQ_FAST_MODEL = "openai/gpt-oss-20b"   # used for titles/JSON — cheap & fast
 
 NVIDIA_EMBED_KEY   = os.getenv("NVIDIA_EMBED_KEY", "")
 NVIDIA_EMBED_MODEL = "nvidia/nv-embedqa-e5-v5"
