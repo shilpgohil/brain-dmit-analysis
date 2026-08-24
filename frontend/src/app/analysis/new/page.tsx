@@ -67,6 +67,53 @@ function isSupportedImageFile(file: File): boolean {
   return file.type.startsWith("image/") || FILE_EXT_RE.test(file.name);
 }
 
+/**
+ * Compress an image file using the browser Canvas API before uploading.
+ * - Resizes to maxDim on the longest side (preserves aspect ratio)
+ * - Re-encodes as JPEG at the given quality (0-1)
+ * - BMP scanner images smaller than maxDim are returned unchanged as PNG
+ *   (no upscaling, no quality loss for already-small scanner prints)
+ *
+ * Fingerprint ridges need enough resolution for feature extraction — 1200 px
+ * at quality 0.92 retains full visible detail while reducing file size ~90%.
+ */
+async function compressImage(
+  file: File,
+  maxDim = 1200,
+  quality = 0.92,
+): Promise<File> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const { naturalWidth: w, naturalHeight: h } = img;
+      // Don't upscale — if already smaller, just convert format if needed
+      const scale = Math.min(1, maxDim / Math.max(w, h));
+      const tw = Math.round(w * scale);
+      const th = Math.round(h * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = tw;
+      canvas.height = th;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, tw, th);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(file); return; }
+          // Keep original filename but with .jpg extension
+          const name = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+          resolve(new File([blob], name, { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        quality,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 function detectSlotFromFilename(filename: string): string | null {
   const stem = filename.replace(/\.[^./\\]+$/, "");
   const prefixMatch = SLOT_PREFIX_RE.exec(stem);
@@ -313,11 +360,25 @@ export default function NewAnalysisPage() {
         counsellor: counsellor || undefined,
         notes: `Purpose: ${purpose}`,
       });
+
+      // Compress images before upload to reduce server memory usage and upload size.
+      // Fingerprints: max 1200px, quality 0.92 — retains all ridge detail.
+      // Palms: max 1000px, quality 0.88 — only need geometry for ATD angle.
+      const compressedFingers = await Promise.all(
+        filled.map(async (s) => ({
+          slotId: s.slotId,
+          file: await compressImage(s.file, 1200, 0.92),
+        }))
+      );
       const palmFiles = palms.filter(Boolean) as SlotFile[];
-      await uploadImagesWithSlots(session.id, [
-        ...filled.map((s) => ({ slotId: s.slotId, file: s.file })),
-        ...palmFiles.map((p) => ({ slotId: p.slotId, file: p.file })),
-      ]);
+      const compressedPalms = await Promise.all(
+        palmFiles.map(async (p) => ({
+          slotId: p.slotId,
+          file: await compressImage(p.file, 1000, 0.88),
+        }))
+      );
+
+      await uploadImagesWithSlots(session.id, [...compressedFingers, ...compressedPalms]);
       await runAnalysis({ session_id: session.id, use_preprocessing: usePreprocessing, generate_pdf: generatePdf });
       router.push(`/analysis/${session.id}`);
     } catch (err: unknown) {

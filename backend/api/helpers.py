@@ -73,8 +73,8 @@ def validate_image_upload(filename: str, content: bytes) -> Tuple[bool, str]:
         return False, f"File '{filename}' is empty."
 
     # Palm photos can be large; fingerprint scanner BMPs are typically < 2 MB.
-    if len(content) > 25 * 1024 * 1024:
-        return False, f"File '{filename}' exceeds the 25 MB upload limit."
+    if len(content) > 8 * 1024 * 1024:
+        return False, f"File '{filename}' exceeds the 8 MB upload limit. Please compress the image first."
 
     try:
         import cv2
