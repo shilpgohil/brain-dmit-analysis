@@ -828,11 +828,27 @@ def _dispatch_to_worker_sync(session_id: str, use_preprocessing: bool, generate_
         persist_session(session_id)
 
 
+# Sessions with a PDF render currently running IN THIS PROCESS.
+# Prevents the stale-retry logic from starting a second concurrent render
+# (two matplotlib renders on a 512 MB instance = OOM death spiral).
+_PDF_RENDERING: set = set()
+
+
 def _finalize_pdf_sync(session_id: str) -> None:
     """
     Render the PDF on the MAIN API from the worker's persisted pipeline output.
     Runs when polling notices status=generating_report with pdf_pending set.
     """
+    if session_id in _PDF_RENDERING:
+        return
+    _PDF_RENDERING.add(session_id)
+    try:
+        _do_finalize_pdf(session_id)
+    finally:
+        _PDF_RENDERING.discard(session_id)
+
+
+def _do_finalize_pdf(session_id: str) -> None:
     session = session_store.get(session_id)
     if not session or not session.get("pdf_pending"):
         return
@@ -1005,25 +1021,32 @@ async def get_analysis(
 
     # ── Split-service mode: sync worker progress from the shared database ──
     if session.get("delegated_to_worker") and session.get("status") in _IN_FLIGHT:
-        from api.store import refresh_session_from_db
-        refresh_session_from_db(session_id)
-        session = session_store[session_id]
+        # Only reload from the DB while the WORKER is the writer (i.e. before
+        # pdf_pending lands in our memory). Once the PDF phase starts, this
+        # process owns the session — re-parsing the multi-MB session JSON on
+        # every 2-second poll would burn the little CPU the render thread has.
+        if not session.get("pdf_pending"):
+            from api.store import refresh_session_from_db
+            refresh_session_from_db(session_id)
+            session = session_store[session_id]
 
         # Worker finished the analysis; PDF assembly happens HERE on the
         # main API (matplotlib/reportlab live on this instance, not the worker).
         #
         # Retry design: a timestamped start marker instead of a one-shot flag.
-        # If a PDF task crashes or the process is killed mid-render, the next
-        # poll after the 6-minute grace window re-triggers it (max 3 attempts,
+        # If a PDF task crashes or the process is killed mid-render, a poll
+        # after the 15-minute grace window re-triggers it (max 3 attempts,
         # then the session completes with a warning instead of hanging forever).
-        if session.get("pdf_pending"):
+        # The 15-min window matters: a render takes 4-7 min on a 0.1-CPU
+        # instance, and retrying while one is still running doubles memory.
+        if session.get("pdf_pending") and session_id not in _PDF_RENDERING:
             attempts = int(session.get("_pdf_attempts") or 0)
             started_at = session.get("_pdf_started_at")
             stale = True
             if isinstance(started_at, str):
                 try:
                     elapsed = (datetime.now() - datetime.fromisoformat(started_at)).total_seconds()
-                    stale = elapsed > 360   # 6 min — generous for 0.1 CPU matplotlib render
+                    stale = elapsed > 900   # 15 min
                 except ValueError:
                     stale = True
             if stale:
