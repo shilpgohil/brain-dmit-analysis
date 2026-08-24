@@ -1,13 +1,21 @@
 """
-Cloudflare R2 (S3-compatible) object storage utility.
+S3-compatible object storage utility.
 
-All functions are no-ops / raise graceful errors when R2 is not configured.
-Set these environment variables to enable R2:
-  CF_ACCOUNT_ID  — Cloudflare Account ID
-  R2_ACCESS_KEY  — R2 API token access key
-  R2_SECRET_KEY  — R2 API token secret key
-  R2_BUCKET      — bucket name  (default: dmit-files)
-  R2_PUBLIC_URL  — public base URL, e.g. https://pub-xxxx.r2.dev
+Supports Cloudflare R2, Backblaze B2, and any S3-compatible provider.
+
+For Cloudflare R2 (requires card):
+  CF_ACCOUNT_ID  = your Cloudflare account ID
+  R2_ACCESS_KEY  = R2 API token access key
+  R2_SECRET_KEY  = R2 API token secret key
+  R2_BUCKET      = dmit-files
+  R2_PUBLIC_URL  = https://pub-xxxx.r2.dev
+
+For Backblaze B2 (no card needed, free 10 GB):
+  STORAGE_ENDPOINT = https://s3.us-west-004.backblazeb2.com  (your B2 region endpoint)
+  R2_ACCESS_KEY    = B2 keyID
+  R2_SECRET_KEY    = B2 applicationKey
+  R2_BUCKET        = dmit-files
+  R2_PUBLIC_URL    = https://f003.backblazeb2.com/file/dmit-files
 """
 from __future__ import annotations
 
@@ -16,28 +24,37 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-_CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
-_R2_ACCESS_KEY = os.environ.get("R2_ACCESS_KEY", "")
-_R2_SECRET_KEY = os.environ.get("R2_SECRET_KEY", "")
+_CF_ACCOUNT_ID    = os.environ.get("CF_ACCOUNT_ID", "")
+_R2_ACCESS_KEY    = os.environ.get("R2_ACCESS_KEY", "")
+_R2_SECRET_KEY    = os.environ.get("R2_SECRET_KEY", "")
+_STORAGE_ENDPOINT = os.environ.get("STORAGE_ENDPOINT", "")
 
-BUCKET = os.environ.get("R2_BUCKET", "dmit-files")
+BUCKET          = os.environ.get("R2_BUCKET", "dmit-files")
 PUBLIC_BASE_URL = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
 
-# R2 is enabled only when all three credentials are present.
-ENABLED: bool = bool(_CF_ACCOUNT_ID and _R2_ACCESS_KEY and _R2_SECRET_KEY)
+# Resolve the S3 endpoint:
+#  1. Explicit STORAGE_ENDPOINT (Backblaze B2, MinIO, Wasabi, etc.)
+#  2. Auto-build from CF_ACCOUNT_ID (Cloudflare R2)
+if _STORAGE_ENDPOINT:
+    _ENDPOINT_URL = _STORAGE_ENDPOINT
+elif _CF_ACCOUNT_ID:
+    _ENDPOINT_URL = f"https://{_CF_ACCOUNT_ID}.r2.cloudflarestorage.com"
+else:
+    _ENDPOINT_URL = ""
+
+ENABLED: bool = bool(_ENDPOINT_URL and _R2_ACCESS_KEY and _R2_SECRET_KEY)
 
 
 def _client():
     if not ENABLED:
         raise RuntimeError(
-            "R2 storage is not configured. "
-            "Set CF_ACCOUNT_ID, R2_ACCESS_KEY, and R2_SECRET_KEY."
+            "Object storage is not configured. "
+            "Set STORAGE_ENDPOINT (or CF_ACCOUNT_ID), R2_ACCESS_KEY, and R2_SECRET_KEY."
         )
     import boto3
-
     return boto3.client(
         "s3",
-        endpoint_url=f"https://{_CF_ACCOUNT_ID}.r2.cloudflarestorage.com",
+        endpoint_url=_ENDPOINT_URL,
         aws_access_key_id=_R2_ACCESS_KEY,
         aws_secret_access_key=_R2_SECRET_KEY,
         region_name="auto",
@@ -45,10 +62,7 @@ def _client():
 
 
 def upload_file(local_path: Path, key: str) -> str:
-    """
-    Upload *local_path* to R2 under *key*.
-    Returns the public URL (empty string if R2 is not configured).
-    """
+    """Upload *local_path* to bucket under *key*. Returns the public URL."""
     if not ENABLED:
         return ""
     _client().upload_file(str(local_path), BUCKET, key)
@@ -56,10 +70,7 @@ def upload_file(local_path: Path, key: str) -> str:
 
 
 def download_to_temp(key: str, suffix: str = "") -> Optional[Path]:
-    """
-    Download R2 object *key* to a local temp file.
-    Returns the temp Path, or None if R2 is not configured.
-    """
+    """Download object *key* to a local temp file. Returns the Path, or None."""
     if not ENABLED:
         return None
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
@@ -81,10 +92,7 @@ def delete_prefix(prefix: str) -> None:
 
 
 def get_presigned_url(key: str, expires: int = 3600) -> Optional[str]:
-    """
-    Generate a time-limited presigned download URL.
-    Returns None if R2 is not configured.
-    """
+    """Generate a time-limited presigned download URL. Returns None if not configured."""
     if not ENABLED:
         return None
     return _client().generate_presigned_url(
@@ -95,7 +103,7 @@ def get_presigned_url(key: str, expires: int = 3600) -> Optional[str]:
 
 
 def public_url(key: str) -> Optional[str]:
-    """Return the public URL for *key*, or None if R2 is not configured / no public base URL."""
+    """Return the public URL for *key*, or None if not configured."""
     if not ENABLED or not PUBLIC_BASE_URL:
         return None
     return f"{PUBLIC_BASE_URL}/{key}"
