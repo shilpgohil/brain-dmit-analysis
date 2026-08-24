@@ -52,33 +52,54 @@ def _client():
             "Set STORAGE_ENDPOINT (or CF_ACCOUNT_ID), R2_ACCESS_KEY, and R2_SECRET_KEY."
         )
     import boto3
+
+    # Derive region from endpoint URL (e.g. "s3.us-west-004.backblazeb2.com" → "us-west-004")
+    # Cloudflare R2 uses "auto"; B2 needs the region extracted from the endpoint hostname.
+    region = "auto"
+    if "backblazeb2.com" in _ENDPOINT_URL:
+        # hostname format: s3.<region>.backblazeb2.com
+        try:
+            region = _ENDPOINT_URL.split("//")[1].split(".")[1]  # e.g. "us-west-004"
+        except Exception:
+            region = "us-west-004"
+
     return boto3.client(
         "s3",
         endpoint_url=_ENDPOINT_URL,
         aws_access_key_id=_R2_ACCESS_KEY,
         aws_secret_access_key=_R2_SECRET_KEY,
-        region_name="auto",
+        region_name=region,
     )
 
 
 def upload_file(local_path: Path, key: str) -> str:
-    """Upload *local_path* to bucket under *key*. Returns the public URL."""
+    """Upload *local_path* to bucket under *key*. Returns the public URL, or '' on failure."""
     if not ENABLED:
         return ""
-    _client().upload_file(str(local_path), BUCKET, key)
-    return f"{PUBLIC_BASE_URL}/{key}" if PUBLIC_BASE_URL else ""
+    try:
+        _client().upload_file(str(local_path), BUCKET, key)
+        return f"{PUBLIC_BASE_URL}/{key}" if PUBLIC_BASE_URL else ""
+    except Exception as _e:
+        import logging as _log
+        _log.getLogger(__name__).warning("Storage upload failed for key %s: %s", key, _e)
+        return ""
 
 
 def download_to_temp(key: str, suffix: str = "") -> Optional[Path]:
     """Download object *key* to a local temp file. Returns the Path, or None."""
     if not ENABLED:
         return None
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     try:
-        _client().download_fileobj(BUCKET, key, tmp)
-    finally:
-        tmp.close()
-    return Path(tmp.name)
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        try:
+            _client().download_fileobj(BUCKET, key, tmp)
+        finally:
+            tmp.close()
+        return Path(tmp.name)
+    except Exception as _e:
+        import logging as _log
+        _log.getLogger(__name__).warning("Storage download failed for key %s: %s", key, _e)
+        return None
 
 
 def delete_prefix(prefix: str) -> None:
