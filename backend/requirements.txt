@@ -9,10 +9,16 @@ python-multipart>=0.0.9     # multipart/form-data file uploads
 pydantic>=2.0.0
 
 # --- Image & fingerprint processing ---
-numpy>=1.26.0                 # NumPy 2.x is fine — wheels available for Python 3.14
-opencv-python-headless>=4.9.0  # headless = same algorithms, no GUI bindings (~80 MB saved)
-scipy>=1.15.0                 # 1.15+ has pre-built wheels for Python 3.14 (no gfortran needed)
-Pillow>=10.0.0                # image loading, resizing, thumbnail
+# NOTE: Do NOT add upper-version caps here.
+# Render uses Python 3.14 — only recent package versions have pre-built
+# Python 3.14 wheels.  Capping forces pip to compile from source, which
+# fails because Render lacks gfortran/Fortran compilers.
+# The first successful deploy installed: numpy-2.5.2, scipy-1.18.1,
+# opencv-python-headless-5.0.0.93 — all working fine.
+numpy>=1.26.0
+opencv-python-headless>=4.9.0   # headless = same algorithms, no GUI bindings (~80 MB saved)
+scipy>=1.12.0                   # signal processing, image topology
+Pillow>=10.0.0                  # image loading, resizing, thumbnail
 
 # --- Auth + QR ---
 python-jose[cryptography]>=3.3.0
