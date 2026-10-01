@@ -1,6 +1,8 @@
 /** Premium champagne / gold palette for analysis results */
 export const GOLD = {
   primary: "#c4a574",
+  /** Lighter gold for text on dark backgrounds — meets WCAG AA (4.5:1) */
+  text: "#e8dcc8",
   bright: "#e8dcc8",
   dim: "rgba(196, 165, 116, 0.14)",
   border: "rgba(196, 165, 116, 0.28)",

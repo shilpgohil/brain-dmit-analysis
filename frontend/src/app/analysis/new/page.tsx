@@ -541,8 +541,8 @@ export default function NewAnalysisPage() {
             )}
           </AnimatePresence>
 
-          {/* 2×5 Finger grid — shows 5 columns on all sizes (represents the 5 fingers per hand) */}
-          <div className="grid grid-cols-5 gap-2 sm:gap-3">
+          {/* 2×5 Finger grid — responsive: 2 cols mobile, 3 cols tablet, 5 cols desktop */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
             {FINGER_SLOTS.map((slot, i) => {
               const filled = slots[i];
               return (
@@ -556,7 +556,7 @@ export default function NewAnalysisPage() {
                   <div
                     className={cn(
                       "relative flex flex-col items-center justify-center rounded-xl cursor-pointer transition-all duration-300 overflow-hidden group",
-                      "border aspect-[3/4]",
+                      "border aspect-[3/4] min-h-[80px] sm:min-h-[100px]",
                       filled
                         ? "border-[rgba(0,212,255,0.3)] bg-[rgba(0,212,255,0.05)]"
                         : "border-white/[0.07] bg-white/[0.02] hover:border-white/[0.14] hover:bg-white/[0.04]",
@@ -887,7 +887,7 @@ function ToggleRow({
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={cn(
-          "relative flex-shrink-0 w-10 h-5.5 rounded-full transition-all duration-300 focus:outline-none",
+          "relative flex-shrink-0 w-10 h-5.5 rounded-full transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a574] focus-visible:ring-offset-2 focus-visible:ring-offset-[#020208]",
           checked
             ? "bg-gradient-to-r from-[#0ea5e9] to-[#8b5cf6] shadow-[0_0_12px_rgba(0,212,255,0.4)]"
             : "bg-white/[0.08]"

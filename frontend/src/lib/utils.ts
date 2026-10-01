@@ -17,6 +17,27 @@ export function pct(value: number | null | undefined): string {
   return isMeasured(value) ? `${Math.round(value * 100)}%` : "N/A";
 }
 
+/** Returns "N/A" for unmeasured values, formatted percentage for measured */
+export function pctOrNA(value: number | null | undefined): string {
+  return isMeasured(value) ? `${Math.round(value * 100)}%` : "N/A";
+}
+
+/** Returns formatted value with unit, or "Not measured" for unmeasured */
+export function measuredOrNA(
+  value: number | null | undefined,
+  formatter: (v: number) => string = (v) => String(v)
+): string {
+  return isMeasured(value) ? formatter(value) : "Not measured";
+}
+
+/** Returns display value with fallback for zero (which might mean "not applicable" like arch pattern) */
+export function valueOrNA(
+  value: number | null | undefined,
+  fallback = "N/A"
+): string {
+  return isMeasured(value) ? String(value) : fallback;
+}
+
 export function measuredEntries(
   scores: object | null | undefined,
 ): [string, number][] {

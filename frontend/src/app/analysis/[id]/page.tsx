@@ -255,35 +255,58 @@ function AnalysisPageContent() {
               </GlassCard>
             )}
 
-            {/* Tab bar */}
-            <motion.div
-              className="flex gap-1 p-1 rounded-2xl w-fit max-w-full overflow-x-auto"
-              style={{ background: "rgba(196,165,116,0.06)", border: `1px solid ${GOLD.border}` }}
-            >
-              {TABS.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={cn(
-                    "relative px-5 py-2.5 text-xs font-medium capitalize transition-all duration-300 rounded-xl whitespace-nowrap flex items-center gap-1.5",
-                    tab === t ? "text-[#1a1510]" : "text-white/35 hover:text-white/60"
-                  )}
-                  style={
-                    tab === t
-                      ? { background: GOLD.gradient, boxShadow: `0 4px 20px ${GOLD.glow}` }
-                      : undefined
-                  }
-                >
-                  {t === "extensions" ? "Extensions"
-                    : t === "fingerprints" ? "Fingerprints"
-                    : t === "quotients" ? "Quotients"
-                    : t.charAt(0).toUpperCase() + t.slice(1)}
-                  {t === "quotients" && result.quotients && Object.keys(result.quotients).length > 0 && tab !== "quotients" && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#c4a574] opacity-80" />
-                  )}
-                </button>
-              ))}
-            </motion.div>
+            {/* Tab bar — responsive: dropdown on mobile, horizontal tabs on desktop */}
+             <div className="w-full">
+               {/* Mobile dropdown */}
+               <select
+                 value={tab}
+                 onChange={(e) => setTab(e.target.value as typeof TABS[number])}
+                 className="lg:hidden w-full mb-3 px-4 py-2.5 text-sm font-medium text-white/80 rounded-xl appearance-none cursor-pointer"
+                 style={{
+                   background: "rgba(196,165,116,0.06)",
+                   border: `1px solid ${GOLD.border}`,
+                   color: "rgba(255,255,255,0.8)",
+                 }}
+               >
+                 {TABS.map((t) => (
+                   <option key={t} value={t} style={{ background: "#0a0a12", color: "white" }}>
+                     {t === "extensions" ? "Extensions"
+                       : t === "fingerprints" ? "Fingerprints"
+                       : t === "quotients" ? "Quotients"
+                       : t.charAt(0).toUpperCase() + t.slice(1)}
+                   </option>
+                 ))}
+               </select>
+               {/* Desktop tabs */}
+               <motion.div
+                 className="hidden lg:flex gap-1 p-1 rounded-2xl w-fit max-w-full overflow-x-auto"
+                 style={{ background: "rgba(196,165,116,0.06)", border: `1px solid ${GOLD.border}` }}
+               >
+                 {TABS.map((t) => (
+                   <button
+                     key={t}
+                     onClick={() => setTab(t)}
+                     className={cn(
+                       "relative px-5 py-2.5 text-xs font-medium capitalize transition-all duration-300 rounded-xl whitespace-nowrap flex items-center gap-1.5",
+                       tab === t ? "text-[#1a1510]" : "text-white/35 hover:text-white/60"
+                     )}
+                     style={
+                       tab === t
+                         ? { background: GOLD.gradient, boxShadow: `0 4px 20px ${GOLD.glow}` }
+                         : undefined
+                     }
+                   >
+                     {t === "extensions" ? "Extensions"
+                       : t === "fingerprints" ? "Fingerprints"
+                       : t === "quotients" ? "Quotients"
+                       : t.charAt(0).toUpperCase() + t.slice(1)}
+                     {t === "quotients" && result.quotients && Object.keys(result.quotients).length > 0 && tab !== "quotients" && (
+                       <span className="w-1.5 h-1.5 rounded-full bg-[#c4a574] opacity-80" />
+                     )}
+                   </button>
+                 ))}
+               </motion.div>
+             </div>
 
             <AnimatePresence mode="wait">
               {/* OVERVIEW TAB */}

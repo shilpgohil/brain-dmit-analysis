@@ -185,7 +185,7 @@ export function OverviewTab({ result }: { result: AnalysisResult }) {
               className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center"
               layout
             >
-              <GoldRadarChart data={radarData} height={300} />
+              <GoldRadarChart data={radarData} height={300} mobileHeight={220} />
               <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
                 {miEntries.map(([k, v], i) => (
                   <GoldBar key={k} label={MI_LABELS[k] ?? k} value={v} delay={i * 0.04} />

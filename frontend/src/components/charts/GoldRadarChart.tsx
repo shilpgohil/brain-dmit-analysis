@@ -15,7 +15,7 @@ interface GoldRadarChartProps {
   height?: number;
 }
 
-export function GoldRadarChart({ data, height = 280 }: GoldRadarChartProps) {
+export function GoldRadarChart({ data, height = 280, mobileHeight = 220 }: GoldRadarChartProps & { mobileHeight?: number }) {
   const chartData = data.map((d) => ({
     subject: d.label,
     value: Math.round(d.value * 100),
@@ -23,28 +23,30 @@ export function GoldRadarChart({ data, height = 280 }: GoldRadarChartProps) {
   }));
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <RadarChart data={chartData} margin={{ top: 16, right: 28, bottom: 16, left: 28 }}>
-        <PolarGrid stroke="rgba(196,165,116,0.12)" />
-        <PolarAngleAxis
-          dataKey="subject"
-          tick={{ fill: "rgba(232,220,200,0.55)", fontSize: 10, fontFamily: "inherit" }}
-          tickLine={false}
-        />
-        <Radar
-          name="Score"
-          dataKey="value"
-          stroke={GOLD.primary}
-          fill={GOLD.primary}
-          fillOpacity={0.22}
-          strokeWidth={2}
-        />
-        <Tooltip
-          {...chartTooltipStyle}
-          contentStyle={{ ...chartTooltipStyle.contentStyle, fontSize: 12 }}
-          formatter={(val) => [`${val}%`, "Capacity"]}
-        />
-      </RadarChart>
-    </ResponsiveContainer>
+    <div className="w-full" style={{ minHeight: mobileHeight }}>
+      <ResponsiveContainer width="100%" height={height}>
+        <RadarChart data={chartData} margin={{ top: 16, right: 28, bottom: 16, left: 28 }}>
+          <PolarGrid stroke="rgba(196,165,116,0.12)" />
+          <PolarAngleAxis
+            dataKey="subject"
+            tick={{ fill: "rgba(232,220,200,0.55)", fontSize: 10, fontFamily: "inherit" }}
+            tickLine={false}
+          />
+          <Radar
+            name="Score"
+            dataKey="value"
+            stroke={GOLD.primary}
+            fill={GOLD.primary}
+            fillOpacity={0.22}
+            strokeWidth={2}
+          />
+          <Tooltip
+            {...chartTooltipStyle}
+            contentStyle={{ ...chartTooltipStyle.contentStyle, fontSize: 12 }}
+            formatter={(val) => [`${val}%`, "Capacity"]}
+          />
+        </RadarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

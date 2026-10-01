@@ -281,12 +281,13 @@ function StatusPill({ entry }: { entry: StatusEntry }) {
 }
 // ── Chart renderer ─────────────────────────────────────────────────────────────
 
-function InlineChart({ spec }: { spec: ChartSpec }) {
+function InlineChart({ spec, isMobile = false }: { spec: ChartSpec; isMobile?: boolean }) {
   const { chart_type, title, labels, datasets } = spec;
   const primary = datasets[0]?.color || GOLD.primary;
   const colors  = datasets[0]?.colors || CHART_COLORS;
   const isHoriz = spec.horizontal;
   const h = Math.max(150, isHoriz ? labels.length * 24 + 30 : 180);
+  const mobileHeight = isMobile ? 200 : undefined;
 
   return (
     <motion.div
@@ -303,111 +304,121 @@ function InlineChart({ spec }: { spec: ChartSpec }) {
       <div className="px-3 pb-3 pt-2">
         {/* Radar */}
         {chart_type === "radar" && (
-          <ResponsiveContainer width="100%" height={220}>
-            <RadarChart data={labels.map((s, i) => ({ subject: s, value: datasets[0]?.data[i] ?? 0 }))}>
-              <PolarGrid stroke="rgba(255,255,255,0.05)" />
-              <PolarAngleAxis dataKey="subject" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 9 }} />
-              <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-              <Radar dataKey="value" stroke={primary} fill={primary} fillOpacity={0.15} strokeWidth={1.5} />
-              <Tooltip {...chartTooltipStyle} formatter={(v: unknown) => [`${Number(v).toFixed(0)}%`]} />
-            </RadarChart>
-          </ResponsiveContainer>
+          <div style={{ minHeight: mobileHeight }}>
+            <ResponsiveContainer width="100%" height={220}>
+              <RadarChart data={labels.map((s, i) => ({ subject: s, value: datasets[0]?.data[i] ?? 0 }))}>
+                <PolarGrid stroke="rgba(255,255,255,0.05)" />
+                <PolarAngleAxis dataKey="subject" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 9 }} />
+                <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                <Radar dataKey="value" stroke={primary} fill={primary} fillOpacity={0.15} strokeWidth={1.5} />
+                <Tooltip {...chartTooltipStyle} formatter={(v: unknown) => [`${Number(v).toFixed(0)}%`]} />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
         )}
 
         {/* Bar (vertical or horizontal, single or multi-dataset) */}
         {chart_type === "bar" && (
-          <ResponsiveContainer width="100%" height={h}>
-            <BarChart
-              data={labels.map((l, i) => ({
-                name: l,
-                ...Object.fromEntries(datasets.map(d => [d.label, d.data[i] ?? 0]))
-              }))}
-              layout={isHoriz ? "vertical" : "horizontal"}
-              margin={{ top: 4, right: 12, left: isHoriz ? 90 : 0, bottom: 4 }}
-            >
-              {isHoriz ? (
-                <>
-                  <XAxis type="number" domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 8 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 8 }} width={85} />
-                </>
-              ) : (
-                <>
-                  <XAxis dataKey="name" tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 8 }} />
-                  <YAxis tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 8 }} />
-                </>
-              )}
-              <Tooltip {...chartTooltipStyle} cursor={chartCursorStyle}
-                formatter={(v: unknown) => [`${Number(v).toFixed(0)}%`]} />
-              {datasets.length > 1 && <Legend wrapperStyle={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }} />}
-              {datasets.map((d, i) => (
-                <Bar key={d.label} dataKey={d.label}
-                  fill={d.color || CHART_COLORS[i % CHART_COLORS.length]}
-                  radius={isHoriz ? [0, 3, 3, 0] : [3, 3, 0, 0]} />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ minHeight: mobileHeight }}>
+            <ResponsiveContainer width="100%" height={h}>
+              <BarChart
+                data={labels.map((l, i) => ({
+                  name: l,
+                  ...Object.fromEntries(datasets.map(d => [d.label, d.data[i] ?? 0]))
+                }))}
+                layout={isHoriz ? "vertical" : "horizontal"}
+                margin={{ top: 4, right: 12, left: isHoriz ? 90 : 0, bottom: 4 }}
+              >
+                {isHoriz ? (
+                  <>
+                    <XAxis type="number" domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 8 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 8 }} width={85} />
+                  </>
+                ) : (
+                  <>
+                    <XAxis dataKey="name" tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 8 }} />
+                    <YAxis tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 8 }} />
+                  </>
+                )}
+                <Tooltip {...chartTooltipStyle} cursor={chartCursorStyle}
+                  formatter={(v: unknown) => [`${Number(v).toFixed(0)}%`]} />
+                {datasets.length > 1 && <Legend wrapperStyle={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }} />}
+                {datasets.map((d, i) => (
+                  <Bar key={d.label} dataKey={d.label}
+                    fill={d.color || CHART_COLORS[i % CHART_COLORS.length]}
+                    radius={isHoriz ? [0, 3, 3, 0] : [3, 3, 0, 0]} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         )}
 
         {/* Doughnut / pie */}
         {(chart_type === "doughnut" || chart_type === "pie") && (
-          <ResponsiveContainer width="100%" height={170}>
-            <PieChart>
-              <Pie
-                data={labels.map((l, i) => ({ name: l, value: datasets[0]?.data[i] ?? 0 }))}
-                cx="50%" cy="50%"
-                innerRadius={chart_type === "doughnut" ? 42 : 0}
-                outerRadius={65}
-                paddingAngle={2}
-                dataKey="value"
-              >
-                {labels.map((_, i) => <Cell key={i} fill={colors[i % colors.length]} />)}
-              </Pie>
-              <Tooltip {...chartTooltipStyle} formatter={(v: unknown) => [`${Number(v).toFixed(0)}%`]} />
-            </PieChart>
-          </ResponsiveContainer>
+          <div style={{ minHeight: mobileHeight }}>
+            <ResponsiveContainer width="100%" height={170}>
+              <PieChart>
+                <Pie
+                  data={labels.map((l, i) => ({ name: l, value: datasets[0]?.data[i] ?? 0 }))}
+                  cx="50%" cy="50%"
+                  innerRadius={chart_type === "doughnut" ? 42 : 0}
+                  outerRadius={65}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  {labels.map((_, i) => <Cell key={i} fill={colors[i % colors.length]} />)}
+                </Pie>
+                <Tooltip {...chartTooltipStyle} formatter={(v: unknown) => [`${Number(v).toFixed(0)}%`]} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         )}
 
         {/* Line chart */}
         {chart_type === "line" && (
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={labels.map((l, i) => ({
-              name: l,
-              ...Object.fromEntries(datasets.map(d => [d.label, d.data[i]]))
-            }))} margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="name" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 8 }} />
-              <YAxis tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 8 }} />
-              <Tooltip {...chartTooltipStyle} />
-              {datasets.map((d, i) => (
-                <Line key={d.label} type="monotone" dataKey={d.label}
-                  stroke={d.color || CHART_COLORS[i % CHART_COLORS.length]}
-                  strokeWidth={2} dot={{ r: 3, fill: d.color || CHART_COLORS[i] }}
-                  activeDot={{ r: 5 }} />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
+          <div style={{ minHeight: mobileHeight }}>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={labels.map((l, i) => ({
+                name: l,
+                ...Object.fromEntries(datasets.map(d => [d.label, d.data[i]]))
+              }))} margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <XAxis dataKey="name" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 8 }} />
+                <YAxis tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 8 }} />
+                <Tooltip {...chartTooltipStyle} />
+                {datasets.map((d, i) => (
+                  <Line key={d.label} type="monotone" dataKey={d.label}
+                    stroke={d.color || CHART_COLORS[i % CHART_COLORS.length]}
+                    strokeWidth={2} dot={{ r: 3, fill: d.color || CHART_COLORS[i] }}
+                    activeDot={{ r: 5 }} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         )}
 
         {/* Area chart */}
         {chart_type === "area" && (
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={labels.map((l, i) => ({
-              name: l,
-              ...Object.fromEntries(datasets.map(d => [d.label, d.data[i]]))
-            }))} margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="name" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 8 }} />
-              <YAxis tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 8 }} />
-              <Tooltip {...chartTooltipStyle} />
-              {datasets.map((d, i) => {
-                const c = d.color || CHART_COLORS[i % CHART_COLORS.length];
-                return (
-                  <Area key={d.label} type="monotone" dataKey={d.label}
-                    stroke={c} fill={c} fillOpacity={0.12} strokeWidth={1.5} />
-                );
-              })}
-            </AreaChart>
-          </ResponsiveContainer>
+          <div style={{ minHeight: mobileHeight }}>
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={labels.map((l, i) => ({
+                name: l,
+                ...Object.fromEntries(datasets.map(d => [d.label, d.data[i]]))
+              }))} margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <XAxis dataKey="name" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 8 }} />
+                <YAxis tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 8 }} />
+                <Tooltip {...chartTooltipStyle} />
+                {datasets.map((d, i) => {
+                  const c = d.color || CHART_COLORS[i % CHART_COLORS.length];
+                  return (
+                    <Area key={d.label} type="monotone" dataKey={d.label}
+                      stroke={c} fill={c} fillOpacity={0.12} strokeWidth={1.5} />
+                  );
+                })}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
     </motion.div>
@@ -426,7 +437,7 @@ function ScoreGrid({ spec }: { spec: WidgetSpec }) {
       <div className="px-4 py-2.5 border-b" style={{ borderColor: GOLD.border }}>
         <p className="text-[10px] font-mono uppercase tracking-widest text-white/35">{spec.title as string}</p>
       </div>
-      <div className={cn("grid gap-1.5 p-3", cols >= 5 ? "grid-cols-5" : "grid-cols-4")}>
+      <div className={cn("grid gap-1.5 p-3", "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5")}>
         {items.map((item) => (
           <div key={item.key} className="rounded-xl p-2.5 text-center"
             style={{ background: `${item.color}10`, border: `1px solid ${item.color}28` }}>
@@ -596,13 +607,14 @@ function WidgetRenderer({ spec }: { spec: WidgetSpec }) {
 
 function SuggestionChips({ chips, onSelect }: { chips: string[]; onSelect: (q: string) => void }) {
   return (
-    <div className="flex flex-wrap gap-1.5 mt-4">
+    <div className="flex flex-wrap gap-2 mt-4">
       {chips.map((chip, i) => (
         <motion.button key={i} type="button"
           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.05 }}
           onClick={() => onSelect(chip)}
-          className="text-[10px] px-3 py-1.5 rounded-xl text-white/40 hover:text-[#c4a574] transition-all border border-white/[0.05] hover:border-[#c4a574]/25 hover:bg-[#c4a574]/[0.04]"
+          className="text-sm px-4 py-2 rounded-xl text-white/40 hover:text-[#c4a574] transition-all border border-white/[0.05] hover:border-[#c4a574]/25 hover:bg-[#c4a574]/[0.04] min-h-[44px] flex items-center"
+          whileTap={{ scale: 0.97 }}
         >{chip}</motion.button>
       ))}
     </div>
@@ -626,7 +638,7 @@ export default function ChatPage() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   // Single status pill — replaces rather than accumulates (no duplication)
   const [currentStatus, setCurrentStatus] = useState<{ status: string; msg: string } | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Closed by default on mobile
   const [error, setError]             = useState<string | null>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
 
@@ -637,6 +649,20 @@ export default function ChatPage() {
   const userScrolledUpRef = useRef(false);
 
   const candidateName = result?.subject_name || "the candidate";
+
+  // Mobile detection for responsive behavior
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // On desktop, keep sidebar open; on mobile, start closed
+  useEffect(() => {
+    setSidebarOpen(!isMobile);
+  }, [isMobile]);
 
   // ── Load analysis ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -847,17 +873,10 @@ export default function ChatPage() {
   const isEmpty = messages.length === 0;
   const streamingMsg = messages.find((m) => m.isStreaming);
 
-  // The nav bar is 56px tall (h-14). The chat UI sits below it.
-  // We use CSS var so the height is exact on every device.
-  const NAV_H = 56;
-
   return (
-    <div
-      className="fixed left-0 right-0 bottom-0 flex overflow-hidden"
-      style={{ background: "#020208", top: NAV_H }}
-    >
+    <div className="min-h-screen flex flex-col" style={{ background: "#020208" }}>
       {/* Ambient background */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
         <div className="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full opacity-[0.03]"
           style={{ background: "radial-gradient(circle, #c4a574, transparent 70%)", filter: "blur(60px)" }} />
         <div className="absolute -bottom-32 -left-32 w-[400px] h-[400px] rounded-full opacity-[0.03]"
@@ -869,27 +888,59 @@ export default function ChatPage() {
           }} />
       </div>
 
-      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <>
-            {/* Mobile scrim — covers only the chat area (below the nav) */}
-            <motion.div
-              className="absolute inset-0 bg-black/60 z-[15] lg:hidden"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setSidebarOpen(false)}
-            />
+      {/* ── Top Nav Bar ─────────────────────────────────────────────────── */}
+      <header className="flex items-center justify-between px-4 h-14 flex-shrink-0 lg:hidden"
+        style={{ borderBottom: `1px solid ${GOLD.border}`, background: "rgba(4,4,15,0.9)", backdropFilter: "blur(12px)" }}>
+        <div className="flex items-center gap-2.5">
+          <button type="button" onClick={() => setSidebarOpen(true)}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-white/25 hover:text-white/60 transition-colors"
+            style={{ border: "1px solid rgba(255,255,255,0.05)" }}>
+            <MessageSquare className="w-4 h-4" />
+          </button>
+          <div className="flex items-center gap-2">
+            <p className="text-[12px] font-medium text-white/80">AI Consultant</p>
+            {threadTitle && (
+              <span className="text-[10px] text-white/25 font-mono">· {threadTitle}</span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {messages.length > 0 && (
+            <button type="button" onClick={clearChat} title="Clear conversation"
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-white/18 hover:text-rose-400 transition-colors">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <Link href={`/analysis/${id}`}
+            className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl text-white/30 hover:text-white/55 border border-white/[0.05] hover:border-white/[0.08] transition-all">
+            <ArrowLeft className="w-3 h-3" />
+            <span>Analysis</span>
+          </Link>
+        </div>
+      </header>
 
-            <motion.aside
-              initial={{ x: -280, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -280, opacity: 0 }}
-              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              className="w-[280px] max-w-[85vw] lg:w-[250px] flex-shrink-0 flex flex-col
-                         absolute left-0 top-0 bottom-0
-                         lg:relative lg:z-auto z-[20]"
-              style={{ borderRight: `1px solid ${GOLD.border}`, background: "rgba(4,4,15,0.98)", backdropFilter: "blur(24px)" }}
-            >
+      {/* ── Main Layout ─────────────────────────────────────────────────── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+        <AnimatePresence>
+          {sidebarOpen && (
+            <>
+              {/* Mobile scrim */}
+              <motion.div
+                className="fixed inset-0 bg-black/60 z-[40] lg:hidden"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                onClick={() => setSidebarOpen(false)}
+              />
+
+              <motion.aside
+                initial={{ x: -280, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -280, opacity: 0 }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="w-[280px] max-w-[85vw] lg:w-[250px] flex-shrink-0 flex flex-col
+                           fixed left-0 top-14 bottom-0 z-[50] lg:relative lg:sticky lg:top-0 lg:z-auto lg:h-[calc(100vh-3.5rem)]"
+                style={{ borderRight: `1px solid ${GOLD.border}`, background: "rgba(4,4,15,0.98)", backdropFilter: "blur(24px)" }}
+              >
               {/* Sidebar header — no logo here (the main nav above already
                   carries the brand logo; duplicating it looked cluttered).
                   This is the consultant's identity block instead. */}
@@ -970,12 +1021,13 @@ export default function ChatPage() {
               {/* Quick starters */}
               <div className="flex-shrink-0 p-3" style={{ borderTop: `1px solid ${GOLD.border}` }}>
                 <p className="text-[8px] text-white/18 font-mono uppercase tracking-widest mb-2 px-1">Quick Start</p>
-                <div className="grid grid-cols-2 gap-1">
+                <div className="grid grid-cols-2 gap-2">
                   {STARTER_SUGGESTIONS.slice(0, 6).map((s) => (
-                    <button key={s.label} type="button" onClick={() => sendMessage(s.q)}
-                      className="text-left px-2 py-1.5 rounded-xl text-[9px] text-white/35 hover:text-[#c4a574] transition-all border border-white/[0.04] hover:border-[#c4a574]/15 hover:bg-[#c4a574]/[0.04]">
+                    <motion.button key={s.label} type="button" onClick={() => sendMessage(s.q)}
+                      className="text-left px-3 py-2 rounded-xl text-sm text-white/35 hover:text-[#c4a574] transition-all border border-white/[0.04] hover:border-[#c4a574]/15 hover:bg-[#c4a574]/[0.04] min-h-[44px] flex items-center"
+                      whileTap={{ scale: 0.97 }}>
                       {s.label}
-                    </button>
+                    </motion.button>
                   ))}
                 </div>
               </div>
@@ -989,9 +1041,9 @@ export default function ChatPage() {
           actually creates a bounded scroll region (otherwise flex children
           grow to content height → the scroll container has infinite height →
           no scrolling on any device). overflow-hidden clips the column. */}
-      <div className="flex-1 min-h-0 flex flex-col min-w-0 overflow-hidden relative z-10">
-        {/* Top bar */}
-        <div className="flex items-center justify-between px-4 h-12 flex-shrink-0"
+      <div className="flex-1 min-h-0 flex flex-col min-w-0 overflow-hidden relative z-10 lg:pl-0">
+        {/* Top bar (desktop only - mobile has header above) */}
+        <div className="hidden lg:flex items-center justify-between px-4 h-12 flex-shrink-0"
           style={{ borderBottom: `1px solid ${GOLD.border}`, background: "rgba(4,4,15,0.7)", backdropFilter: "blur(12px)" }}>
           <div className="flex items-center gap-2.5">
             {!sidebarOpen && (
@@ -1066,11 +1118,12 @@ export default function ChatPage() {
                       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.1 + i * 0.04 }}
                       onClick={() => sendMessage(s.q)}
-                      className="text-left p-3.5 rounded-2xl transition-all group"
-                      style={{ background: "rgba(196,165,116,0.03)", border: `1px solid ${GOLD.border}` }}>
-                      <p className="font-medium text-[11px] text-white/60 group-hover:text-[#c4a574] transition-colors mb-1">{s.label}</p>
+                      className="text-left p-4 rounded-2xl transition-all group min-h-[88px] flex flex-col justify-between"
+                      style={{ background: "rgba(196,165,116,0.03)", border: `1px solid ${GOLD.border}` }}
+                      whileTap={{ scale: 0.98 }}>
+                      <p className="font-medium text-sm text-white/60 group-hover:text-[#c4a574] transition-colors mb-1">{s.label}</p>
                       <p className="text-white/22 text-[9px] leading-tight line-clamp-2">{s.q}</p>
-                      <ChevronRight className="w-3 h-3 text-white/12 group-hover:text-[#c4a574]/40 mt-1.5 transition-colors" />
+                      <ChevronRight className="w-4 h-4 text-white/12 group-hover:text-[#c4a574]/40 mt-2 transition-colors" />
                     </motion.button>
                   ))}
                 </div>
@@ -1134,7 +1187,7 @@ export default function ChatPage() {
                         )}
 
                         {/* Charts */}
-                        {(msg.charts || []).map((c, i) => <InlineChart key={i} spec={c} />)}
+                        {(msg.charts || []).map((c, i) => <InlineChart key={i} spec={c} isMobile={isMobile} />)}
 
                         {/* Widgets */}
                         {(msg.widgets || []).map((w, i) => <WidgetRenderer key={i} spec={w} />)}
@@ -1207,12 +1260,13 @@ export default function ChatPage() {
           <div className="max-w-3xl mx-auto">
             {/* Suggestions above composer */}
             {!isLoading && isEmpty && (
-              <div className="flex flex-wrap gap-1.5 mb-2">
+              <div className="flex flex-wrap gap-2 mb-2">
                 {STARTER_SUGGESTIONS.slice(0, 3).map((s) => (
-                  <button key={s.label} type="button" onClick={() => sendMessage(s.q)}
-                    className="text-[10px] px-2.5 py-1.5 rounded-xl text-white/35 hover:text-[#c4a574] transition-all border border-white/[0.05] hover:border-[#c4a574]/20">
+                  <motion.button key={s.label} type="button" onClick={() => sendMessage(s.q)}
+                    className="text-sm px-3 py-2 rounded-xl text-white/35 hover:text-[#c4a574] transition-all border border-white/[0.05] hover:border-[#c4a574]/20 min-h-[44px] flex items-center"
+                    whileTap={{ scale: 0.97 }}>
                     {s.label}
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             )}
@@ -1252,6 +1306,7 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }

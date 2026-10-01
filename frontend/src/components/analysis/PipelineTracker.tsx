@@ -54,9 +54,9 @@ export function PipelineTracker({ stages }: PipelineTrackerProps) {
                 <div className="mt-1.5 h-0.5 w-full rounded-full overflow-hidden"
                   style={{ background: "rgba(255,255,255,0.05)" }}>
                   <motion.div
-                    className="h-full rounded-full"
+                    className="h-full rounded-full w-1/3"
                     style={{ background: "linear-gradient(90deg, #00d4ff, #8b5cf6)" }}
-                    animate={{ x: ["-100%", "200%"] }}
+                    animate={{ x: ["-100%", "300%"] }}
                     transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
                   />
                 </div>

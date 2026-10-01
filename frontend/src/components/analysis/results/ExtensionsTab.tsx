@@ -76,6 +76,8 @@ function ExtensionDetailCard({
       }}
       onClick={() => setOpen(!open)}
       whileHover={{ y: -3, boxShadow: `0 12px 40px ${accent}20` }}
+      whileTap={{ scale: 0.98 }}
+      onTouchStart={() => {}}
     >
       <motion.div
         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"

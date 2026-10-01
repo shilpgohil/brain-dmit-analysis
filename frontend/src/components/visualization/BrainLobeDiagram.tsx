@@ -88,8 +88,12 @@ export function BrainLobeDiagram({ data }: BrainLobeDiagramProps) {
             </div>
             {hemis && (isMeasured(hemis.left) || isMeasured(hemis.right)) && (
               <div className="flex items-center gap-3 mt-1 text-[9px] font-mono text-white/30">
-                <span>L (right hand): {pct(hemis.left)}</span>
-                <span>R (left hand): {pct(hemis.right)}</span>
+                {(isMeasured(hemis.left) && hemis.left > 0) && <span>L (right hand): {pct(hemis.left)}</span>}
+                {(isMeasured(hemis.right) && hemis.right > 0) && <span>R (left hand): {pct(hemis.right)}</span>}
+                {(isMeasured(hemis.left) && hemis.left === 0 || !isMeasured(hemis.left)) &&
+                 (isMeasured(hemis.right) && hemis.right === 0 || !isMeasured(hemis.right)) && (
+                  <span className="text-white/15">Hemisphere data pending</span>
+                )}
               </div>
             )}
             <p className="text-[10px] text-white/20 mt-1 leading-snug">
