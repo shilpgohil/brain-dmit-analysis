@@ -12,7 +12,7 @@ from ..theme import (
 )
 from .helpers import shrink_block, SectionHeader, chart_image, institutional_table
 from ..charts import generate_horizontal_progress_bars
-from ..assets.boho_vectors import draw_boho_academic_somatic_balance
+from ..assets.boho_vectors import draw_boho_academic_somatic_balance, draw_boho_academic_streams
 
 
 def build_pages_20_22_academic_talents(report_data: Dict[str, Any]) -> list:
@@ -131,6 +131,8 @@ def build_pages_20_22_academic_talents(report_data: Dict[str, Any]) -> list:
         center_cols=[1],
     )
     p21_block.append(t_stream)
+    p21_block.append(Spacer(1, 14))
+    p21_block.append(draw_boho_academic_streams(width=CONTENT_W, height=100))
 
     pages.append(shrink_block(p21_block, max_height=9.2 * inch, _label='streams_page_21'))
     pages.append(PageBreak())

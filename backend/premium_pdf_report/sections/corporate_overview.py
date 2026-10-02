@@ -17,7 +17,7 @@ from .helpers import (
     shrink_block, SectionHeader, sub_heading,
     institutional_table, institutional_card,
 )
-from ..assets.boho_vectors import draw_boho_wax_seal
+from ..assets.boho_vectors import draw_boho_wax_seal, draw_boho_organization_pillars
 
 
 def build_page_02_credentials(session: Dict[str, Any]) -> list:
@@ -200,6 +200,8 @@ def build_page_03_organization() -> list:
     )
     t_frame = institutional_card([Paragraph(framework_html, STYLES['body'])], width=CONTENT_W, border_color=GOLD_LIGHT, bg_color=GOLD_PALE)
     block.append(t_frame)
+    block.append(Spacer(1, 14))
+    block.append(draw_boho_organization_pillars(width=CONTENT_W, height=75))
 
     return [shrink_block(block, max_height=9.2 * inch, _label='organization_page_03')]
 

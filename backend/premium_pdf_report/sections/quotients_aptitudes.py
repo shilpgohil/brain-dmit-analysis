@@ -16,6 +16,7 @@ from ..charts import (
     generate_horizontal_progress_bars,
     create_gauge_chart,
 )
+from ..assets.boho_vectors import draw_boho_quotients_emblem
 
 
 def build_pages_17_19_quotients(report_data: Dict[str, Any], quotients: Dict[str, float]) -> list:
@@ -135,6 +136,8 @@ def build_pages_17_19_quotients(report_data: Dict[str, Any], quotients: Dict[str
         ('ROUNDEDCORNERS', [4, 4, 4, 4]),
     ]))
     p18_block.append(t_g1_5)
+    p18_block.append(Spacer(1, 6))
+    p18_block.append(draw_boho_quotients_emblem(width=CONTENT_W, height=48))
 
     pages.append(shrink_block(p18_block, max_height=9.2 * inch, _label='quotients_page_18'))
     pages.append(PageBreak())

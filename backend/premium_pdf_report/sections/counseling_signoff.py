@@ -11,7 +11,7 @@ from ..theme import (
     IVORY, WHITE, CONTENT_W, GREEN_STRONG,
 )
 from .helpers import shrink_block, SectionHeader, institutional_table, institutional_card
-from ..assets.boho_vectors import draw_boho_counseling_seal
+from ..assets.boho_vectors import draw_boho_counseling_seal, draw_boho_counseling_roadmap
 
 
 def build_pages_59_60_counseling_signoff(
@@ -80,6 +80,8 @@ def build_pages_59_60_counseling_signoff(
     )
     t_notes = institutional_card([Paragraph(notes_box_html, STYLES['body'])], width=CONTENT_W, border_color=GOLD_LIGHT, bg_color=IVORY)
     p59_block.append(t_notes)
+    p59_block.append(Spacer(1, 14))
+    p59_block.append(draw_boho_counseling_roadmap(width=CONTENT_W, height=75))
 
     pages.append(shrink_block(p59_block, max_height=9.2 * inch, _label='counseling_page_59'))
     pages.append(PageBreak())
@@ -153,7 +155,7 @@ def build_pages_59_60_counseling_signoff(
     t_fb = institutional_card([Paragraph(feedback_box_html, STYLES['body'])], width=CONTENT_W, border_color=GOLD, bg_color=GOLD_PALE)
     p60_block.append(t_fb)
     p60_block.append(Spacer(1, 8))
-    p60_block.append(draw_boho_counseling_seal(width=CONTENT_W, height=36))
+    p60_block.append(draw_boho_counseling_seal(width=CONTENT_W, height=52))
     p60_block.append(Spacer(1, 8))
 
     cand_sig = session.get('candidate_signature')

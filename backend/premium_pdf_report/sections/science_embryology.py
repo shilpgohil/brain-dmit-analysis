@@ -14,7 +14,7 @@ from .helpers import (
     shrink_block, SectionHeader, sub_heading,
     institutional_table, institutional_card,
 )
-from ..assets.boho_vectors import draw_boho_embryo_seedling
+from ..assets.boho_vectors import draw_boho_embryo_seedling, draw_boho_literature_heritage
 
 
 def build_pages_08_10_science() -> list:
@@ -210,6 +210,8 @@ def build_pages_08_10_science() -> list:
         ('ROUNDEDCORNERS', [4, 4, 4, 4]),
     ]))
     p10_block.append(t_cites)
+    p10_block.append(Spacer(1, 14))
+    p10_block.append(draw_boho_literature_heritage(width=CONTENT_W, height=110))
 
     pages.append(shrink_block(p10_block, max_height=9.2 * inch, _label='science_page_10'))
     return pages

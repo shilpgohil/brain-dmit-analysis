@@ -15,6 +15,20 @@ from ..charts import (
     generate_task_people_donut,
     generate_analysis_action_divergence,
 )
+from ..assets.boho_vectors import (
+    draw_boho_learning_visual,
+    draw_boho_learning_auditory,
+    draw_boho_learning_kinesthetic,
+    draw_boho_habits_vision,
+    draw_boho_habits_synergy,
+    draw_boho_habits_empathy,
+    draw_boho_habits_renewal,
+    draw_boho_leadership_alignment,
+    draw_boho_cognitive_processing,
+    draw_boho_collaboration_dynamics,
+    draw_boho_behavioral_ambition,
+    draw_boho_behavioral_equilibrium,
+)
 
 
 def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
@@ -32,7 +46,7 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
     k_pct = (k_val / total_vak) * 100
 
     def _make_vak_page(mod_num: int, title: str, pct: float, icon_col: str,
-                       chars: list[str], tips: list[str], neuro: str) -> list:
+                       chars: list[str], tips: list[str], neuro: str, art_flowable=None) -> list:
         blk = []
         blk.append(SectionHeader(8, f"PRIMARY MODALITY LEARNING STYLES: {title.upper()}"))
         blk.append(HRFlowable(width=CONTENT_W, thickness=1.0, color=GOLD, spaceAfter=12, spaceBefore=4))
@@ -60,6 +74,10 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
         t_t = institutional_card([Paragraph(f'<font size="8.5" color="#1F2937">{t_html}</font>', STYLES['body'])], width=CONTENT_W, border_color=GOLD, bg_color=GOLD_PALE)
         blk.append(t_t)
 
+        if art_flowable:
+            blk.append(Spacer(1, 14))
+            blk.append(art_flowable)
+
         return [shrink_block(blk, max_height=9.2 * inch, _label=f'vak_page_{mod_num}')]
 
     v_chars = [
@@ -74,7 +92,7 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
         '<b>Spatial Flashcards:</b> Utilize visual digital flashcards with integrated diagrams and high-contrast cues.',
         '<b>Quiet Visual Sanctuary:</b> Ensure study desk faces a blank neutral wall rather than active doorways or windows.',
     ]
-    pages.append(_make_vak_page(23, "Visual Learning Modality", v_pct, "#1E3A8A", v_chars, v_tips, "Primary Occipital Lobe Sensory Pathway (Little Fingers L5/R5)")[0])
+    pages.append(_make_vak_page(23, "Visual Learning Modality", v_pct, "#1E3A8A", v_chars, v_tips, "Primary Occipital Lobe Sensory Pathway (Little Fingers L5/R5)", draw_boho_learning_visual(width=CONTENT_W, height=110))[0])
     pages.append(PageBreak())
 
     a_chars = [
@@ -89,7 +107,7 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
         '<b>Socratic Study Groups:</b> Engage in structured group debates to process contrasting perspectives.',
         '<b>Acoustic Calibration:</b> Utilize 40Hz binaural beats or brown noise to shield against irregular environmental noise.',
     ]
-    pages.append(_make_vak_page(24, "Auditory Learning Modality", a_pct, "#C46849", a_chars, a_tips, "Primary Temporal Lobe Auditory Pathway (Ring Fingers L4/R4)")[0])
+    pages.append(_make_vak_page(24, "Auditory Learning Modality", a_pct, "#C46849", a_chars, a_tips, "Primary Temporal Lobe Auditory Pathway (Ring Fingers L4/R4)", draw_boho_learning_auditory(width=CONTENT_W, height=110))[0])
     pages.append(PageBreak())
 
     k_chars = [
@@ -104,7 +122,7 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
         '<b>Role-Play Simulations:</b> Re-enact historical events or scientific interactions physically.',
         '<b>Pomodoro Movement Rest:</b> 25-minute study sprints punctuated by 5-minute physical stretching intervals.',
     ]
-    pages.append(_make_vak_page(25, "Kinesthetic Learning Modality", k_pct, "#5A7865", k_chars, k_tips, "Primary Parietal Lobe Somatosensory Pathway (Middle Fingers L3/R3)")[0])
+    pages.append(_make_vak_page(25, "Kinesthetic Learning Modality", k_pct, "#5A7865", k_chars, k_tips, "Primary Parietal Lobe Somatosensory Pathway (Middle Fingers L3/R3)", draw_boho_learning_kinesthetic(width=CONTENT_W, height=110))[0])
     pages.append(PageBreak())
 
     def _make_habit_card(h_num: str, h_title: str, h_sub: str, h_score: float, h_guidance: str, col: str) -> Table:
@@ -125,6 +143,8 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
     p26_blk.append(Spacer(1, 10))
     p26_blk.append(_make_habit_card('2', 'Begin with the End in Mind', 'Mental Creation & Long-Term Purpose', 0.82,
                                    'Envision desired future achievements prior to commencing execution. Formulate clear criteria for long-term projects.', '#C46849'))
+    p26_blk.append(Spacer(1, 14))
+    p26_blk.append(draw_boho_habits_vision(width=CONTENT_W, height=120))
     pages.append(shrink_block(p26_blk, max_height=9.2 * inch, _label='habits_page_26'))
     pages.append(PageBreak())
 
@@ -136,6 +156,8 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
     p27_blk.append(Spacer(1, 10))
     p27_blk.append(_make_habit_card('4', 'Think Win-Win', 'Mutual Benefit & Interpersonal EQ', 0.76,
                                    'Approach negotiations and collaborative projects seeking agreements that satisfy all parties, establishing psychological safety.', '#D99B38'))
+    p27_blk.append(Spacer(1, 14))
+    p27_blk.append(draw_boho_habits_synergy(width=CONTENT_W, height=120))
     pages.append(shrink_block(p27_blk, max_height=9.2 * inch, _label='habits_page_27'))
     pages.append(PageBreak())
 
@@ -147,6 +169,8 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
     p28_blk.append(Spacer(1, 10))
     p28_blk.append(_make_habit_card('6', 'Synergize', 'Creative Cooperation & Synthesis', 0.75,
                                    'Combine individual strengths through collaborative teamwork, producing outcomes superior to solitary efforts.', '#C46849'))
+    p28_blk.append(Spacer(1, 14))
+    p28_blk.append(draw_boho_habits_empathy(width=CONTENT_W, height=120))
     pages.append(shrink_block(p28_blk, max_height=9.2 * inch, _label='habits_page_28'))
     pages.append(PageBreak())
 
@@ -166,6 +190,8 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
     )
     t_sum = institutional_card([Paragraph(summary_html, STYLES['body'])], width=CONTENT_W, border_color=GOLD_LIGHT, bg_color=IVORY)
     p29_blk.append(t_sum)
+    p29_blk.append(Spacer(1, 14))
+    p29_blk.append(draw_boho_habits_renewal(width=CONTENT_W, height=120))
     pages.append(shrink_block(p29_blk, max_height=9.2 * inch, _label='habits_page_29'))
     pages.append(PageBreak())
 
@@ -192,6 +218,8 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
     )
     t_lead = institutional_card([Paragraph(lead_text, STYLES['body'])], width=CONTENT_W, border_color=GOLD, bg_color=GOLD_PALE)
     p30_blk.append(t_lead)
+    p30_blk.append(Spacer(1, 12))
+    p30_blk.append(draw_boho_leadership_alignment(width=CONTENT_W, height=105))
     pages.append(shrink_block(p30_blk, max_height=9.2 * inch, _label='leadership_page_30'))
     pages.append(PageBreak())
 
@@ -219,6 +247,8 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
     )
     t_anal = institutional_card([Paragraph(anal_text, STYLES['body'])], width=CONTENT_W, border_color=GOLD_LIGHT, bg_color=IVORY)
     p31_blk.append(t_anal)
+    p31_blk.append(Spacer(1, 12))
+    p31_blk.append(draw_boho_cognitive_processing(width=CONTENT_W, height=105))
     pages.append(shrink_block(p31_blk, max_height=9.2 * inch, _label='processing_page_31'))
     pages.append(PageBreak())
 
@@ -255,6 +285,8 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
         center_cols=[1],
     )
     p32_blk.append(t_collab)
+    p32_blk.append(Spacer(1, 14))
+    p32_blk.append(draw_boho_collaboration_dynamics(width=CONTENT_W, height=115))
     pages.append(shrink_block(p32_blk, max_height=9.2 * inch, _label='collab_page_32'))
     pages.append(PageBreak())
 
@@ -270,6 +302,8 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
     p33_blk.append(Spacer(1, 12))
     p33_blk.append(_make_habit_card('II', 'Competitive Spirit', 'External Benchmarking & Victory Orientation', comp_score,
                                    'Energized by comparative performance metrics and competitive arenas. Thrives when benchmarked against high-performing cohorts.', '#C46849'))
+    p33_blk.append(Spacer(1, 14))
+    p33_blk.append(draw_boho_behavioral_ambition(width=CONTENT_W, height=120))
     pages.append(shrink_block(p33_blk, max_height=9.2 * inch, _label='drivers_page_33'))
     pages.append(PageBreak())
 
@@ -285,6 +319,8 @@ def build_pages_23_34_learning_behavioral(report_data: Dict[str, Any]) -> list:
     p34_blk.append(Spacer(1, 12))
     p34_blk.append(_make_habit_card('IV', 'Risk Appetite & Innovation', 'Comfort with Strategic Uncertainty', risk_app,
                                    'Willingness to explore novel pathways with uncertain outcomes. Balances calculated downside risk with transformative upside potential.', '#D99B38'))
+    p34_blk.append(Spacer(1, 14))
+    p34_blk.append(draw_boho_behavioral_equilibrium(width=CONTENT_W, height=120))
     pages.append(shrink_block(p34_blk, max_height=9.2 * inch, _label='drivers_page_34'))
 
     return pages
