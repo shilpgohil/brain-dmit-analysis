@@ -11,6 +11,7 @@ from ..theme import (
     IVORY, WHITE, CONTENT_W,
 )
 from .helpers import shrink_block, SectionHeader, sub_heading, institutional_card
+from ..assets.boho_vectors import draw_boho_legal_seal
 
 
 def build_page_07_candidate_legal(report_data: Dict[str, Any], session: Dict[str, Any]) -> list:
@@ -110,5 +111,7 @@ def build_page_07_candidate_legal(report_data: Dict[str, Any], session: Dict[str
     )
     p_ack = Paragraph(f'<font size="7" color="{NAVY.hexval()}">{ack_text}</font>', STYLES['body'])
     block.append(institutional_card([p_ack], width=CONTENT_W, border_color=GOLD_LIGHT, bg_color=GOLD_PALE))
+    block.append(Spacer(1, 4))
+    block.append(draw_boho_legal_seal(width=CONTENT_W, height=48))
 
     return [shrink_block(block, max_height=9.2 * inch, _label='candidate_legal_page_07')]

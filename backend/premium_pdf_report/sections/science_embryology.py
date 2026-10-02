@@ -14,6 +14,7 @@ from .helpers import (
     shrink_block, SectionHeader, sub_heading,
     institutional_table, institutional_card,
 )
+from ..assets.boho_vectors import draw_boho_embryo_seedling
 
 
 def build_pages_08_10_science() -> list:
@@ -72,6 +73,8 @@ def build_pages_08_10_science() -> list:
     )
     t_gest = institutional_card([Paragraph(gest_text, STYLES['body'])], width=CONTENT_W, border_color=GOLD_LIGHT, bg_color=GOLD_PALE)
     p8_block.append(t_gest)
+    p8_block.append(Spacer(1, 8))
+    p8_block.append(draw_boho_embryo_seedling(width=CONTENT_W, height=50))
 
     pages.append(shrink_block(p8_block, max_height=9.2 * inch, _label='science_page_08'))
     pages.append(PageBreak())

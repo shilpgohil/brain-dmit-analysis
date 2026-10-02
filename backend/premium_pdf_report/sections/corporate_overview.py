@@ -17,6 +17,7 @@ from .helpers import (
     shrink_block, SectionHeader, sub_heading,
     institutional_table, institutional_card,
 )
+from ..assets.boho_vectors import draw_boho_wax_seal
 
 
 def build_page_02_credentials(session: Dict[str, Any]) -> list:
@@ -47,14 +48,15 @@ def build_page_02_credentials(session: Dict[str, Any]) -> list:
         f'<font size="7.5" color="{GOLD_DARK.hexval()}">Board Certification ID</font>'
     )
     p_seal = Paragraph(seal_html, STYLES['body'])
+    boho_wax = draw_boho_wax_seal(width=CONTENT_W * 0.28, height=44)
 
-    t_seal = Table([[p_seal]], colWidths=[CONTENT_W * 0.28])
+    t_seal = Table([[boho_wax], [p_seal]], colWidths=[CONTENT_W * 0.28])
     t_seal.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), GOLD_PALE),
         ('BOX', (0, 0), (-1, -1), 1.0, GOLD),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('TOPPADDING', (0, 0), (-1, -1), 16),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 16),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ('LEFTPADDING', (0, 0), (-1, -1), 10),
         ('RIGHTPADDING', (0, 0), (-1, -1), 10),
         ('ROUNDEDCORNERS', [4, 4, 4, 4]),

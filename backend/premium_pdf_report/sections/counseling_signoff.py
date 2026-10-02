@@ -11,6 +11,7 @@ from ..theme import (
     IVORY, WHITE, CONTENT_W, GREEN_STRONG,
 )
 from .helpers import shrink_block, SectionHeader, institutional_table, institutional_card
+from ..assets.boho_vectors import draw_boho_counseling_seal
 
 
 def build_pages_59_60_counseling_signoff(
@@ -151,7 +152,9 @@ def build_pages_59_60_counseling_signoff(
     )
     t_fb = institutional_card([Paragraph(feedback_box_html, STYLES['body'])], width=CONTENT_W, border_color=GOLD, bg_color=GOLD_PALE)
     p60_block.append(t_fb)
-    p60_block.append(Spacer(1, 14))
+    p60_block.append(Spacer(1, 8))
+    p60_block.append(draw_boho_counseling_seal(width=CONTENT_W, height=36))
+    p60_block.append(Spacer(1, 8))
 
     cand_sig = session.get('candidate_signature')
     coun_sig = session.get('counselor_signature')

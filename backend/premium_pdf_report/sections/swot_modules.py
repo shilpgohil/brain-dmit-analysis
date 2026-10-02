@@ -15,6 +15,7 @@ from .helpers import (
     institutional_table, institutional_card,
 )
 from ..charts import create_personality_radar
+from ..assets.boho_vectors import draw_boho_swot_badge
 
 
 def _build_quadrant_page(
@@ -38,11 +39,12 @@ def _build_quadrant_page(
     block.append(Paragraph(overview_text, STYLES['body']))
     block.append(Spacer(1, 6))
 
+    badge_art = draw_boho_swot_badge(letter, width=CONTENT_W * 0.20, height=48)
     left_badge = [
-        Paragraph(f'<font size="20" color="{NAVY.hexval()}"><b>{letter}</b></font>', STYLES['body']),
-        Spacer(1, 3),
-        Paragraph(f'<font size="7" color="{NAVY.hexval()}">IMPACT INDEX</font><br/>'
-                  f'<font size="11" color="{GOLD_DARK.hexval()}"><b>{round(impact_pct * 100)}%</b></font>', STYLES['body']),
+        badge_art,
+        Paragraph(f'<font size="13" color="{NAVY.hexval()}"><b>{letter}</b></font> &bull; '
+                  f'<font size="10" color="{GOLD_DARK.hexval()}"><b>{round(impact_pct * 100)}%</b></font><br/>'
+                  f'<font size="6.5" color="{NAVY.hexval()}">IMPACT INDEX</font>', STYLES['body']),
     ]
     right_desc = [
         Paragraph(f'<b><font size="9.5" color="{NAVY.hexval()}">Executive Neuro-Cognitive Synthesis</font></b>', STYLES['body']),

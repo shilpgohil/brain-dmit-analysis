@@ -11,6 +11,7 @@ from ..theme import (
     IVORY, WHITE, CONTENT_W,
 )
 from .helpers import shrink_block, SectionHeader, institutional_table, institutional_card
+from ..assets.boho_vectors import draw_boho_career_journey
 
 
 def build_pages_43_58_career_pathways(
@@ -132,6 +133,8 @@ def build_pages_43_58_career_pathways(
         center_cols=[0, 2],
     )
     p44_block.append(t_p44)
+    p44_block.append(Spacer(1, 14))
+    p44_block.append(draw_boho_career_journey(width=CONTENT_W, height=52))
 
     pages.append(shrink_block(p44_block, max_height=9.2 * inch, _label='career_page_44'))
     pages.append(PageBreak())
