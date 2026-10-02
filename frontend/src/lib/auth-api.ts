@@ -41,23 +41,25 @@ async function apiGet<T>(path: string): Promise<T> {
 // ── Partner auth ──────────────────────────────────────────────────────────
 
 export async function loginPartner(email: string, password: string): Promise<void> {
-  const { access_token } = await apiPost<{ access_token: string }>(
+  const { access_token, refresh_token } = await apiPost<{ access_token: string; refresh_token?: string }>(
     "/auth/login", { email, password }
   );
-  // Fetch profile with the newly-issued token directly — authStore is still null at this point
   const res = await fetch(`${apiBase()}/auth/me`, {
     headers: { Authorization: `Bearer ${access_token}` },
     credentials: "include",
   });
   if (!res.ok) throw new Error("Failed to load partner profile");
   const { user, features } = await res.json() as { user: UserProfile; features: FeatureMap };
-  useAuthStore.getState().setAuth({ ...user, role: "partner" }, features, access_token, "partner");
+  useAuthStore.getState().setAuth({ ...user, role: "partner" }, features, access_token, "partner", refresh_token);
   persistScopeHint("partner");
 }
 
 export async function logoutPartner(): Promise<void> {
+  const token = useAuthStore.getState().refreshToken;
   await fetch(`${apiBase()}/auth/logout`, {
     method: "POST",
+    headers: token ? { "X-Refresh-Token": token, "Content-Type": "application/json" } : {},
+    body: JSON.stringify({ refresh_token: token || undefined }),
     credentials: "include",
   }).catch(() => {});
   useAuthStore.getState().clearAuth();
@@ -67,28 +69,31 @@ export async function logoutPartner(): Promise<void> {
 // ── Admin auth ─────────────────────────────────────────────────────────────
 
 export async function loginAdmin(email: string, password: string): Promise<void> {
-  const { access_token } = await apiPost<{ access_token: string }>(
+  const { access_token, refresh_token } = await apiPost<{ access_token: string; refresh_token?: string }>(
     "/admin/auth/login", { email, password }
   );
-  const me = await (async () => {
-    const res = await fetch(`${apiBase()}/admin/auth/me`, {
-      headers: { Authorization: `Bearer ${access_token}` },
-      credentials: "include",
-    });
-    return res.json() as Promise<UserProfile>;
-  })();
+  const res = await fetch(`${apiBase()}/admin/auth/me`, {
+    headers: { Authorization: `Bearer ${access_token}` },
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load admin profile");
+  const me = await res.json() as UserProfile;
   useAuthStore.getState().setAuth(
     { ...me, role: "admin" },
-    {},    // admin has no feature map
+    {},
     access_token,
     "admin",
+    refresh_token,
   );
   persistScopeHint("admin");
 }
 
 export async function logoutAdmin(): Promise<void> {
+  const token = useAuthStore.getState().refreshToken;
   await fetch(`${apiBase()}/admin/auth/logout`, {
     method: "POST",
+    headers: token ? { "X-Refresh-Token": token, "Content-Type": "application/json" } : {},
+    body: JSON.stringify({ refresh_token: token || undefined }),
     credentials: "include",
   }).catch(() => {});
   useAuthStore.getState().clearAuth();
@@ -98,36 +103,65 @@ export async function logoutAdmin(): Promise<void> {
 // ── Boot refresh (call once on app load) ──────────────────────────────────
 
 export async function tryRefreshOnBoot(): Promise<boolean> {
-  const scope = getScopeHint();
+  const currentState = useAuthStore.getState();
+  const scope = currentState.scope || getScopeHint();
   if (!scope) {
-    useAuthStore.getState().setLoading(false);
+    currentState.setLoading(false);
     return false;
   }
+
+  const hasExistingSession = Boolean(currentState.user && currentState.accessToken);
   const path = scope === "admin" ? "/admin/auth/refresh" : "/auth/refresh";
   const mePath = scope === "admin" ? "/admin/auth/me" : "/auth/me";
+  const storedRefreshToken = currentState.refreshToken;
+
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (storedRefreshToken) {
+      headers["X-Refresh-Token"] = storedRefreshToken;
+    }
+
     const res = await fetch(`${apiBase()}${path}`, {
       method: "POST",
+      headers,
       credentials: "include",
+      body: JSON.stringify({ refresh_token: storedRefreshToken || undefined }),
     });
-    if (!res.ok) throw new Error("refresh failed");
-    const { access_token } = await res.json();
+
+    if (!res.ok) {
+      if (!hasExistingSession) {
+        throw new Error("refresh failed");
+      }
+      useAuthStore.getState().setLoading(false);
+      return true;
+    }
+
+    const { access_token, refresh_token: new_refresh } = await res.json();
     const meRes = await fetch(`${apiBase()}${mePath}`, {
       headers: { Authorization: `Bearer ${access_token}` },
       credentials: "include",
     });
-    if (!meRes.ok) throw new Error("/me failed after refresh");
-    const me = await meRes.json();
-    if (scope === "admin") {
-      useAuthStore.getState().setAuth({ ...me, role: "admin" }, {}, access_token, "admin");
+
+    if (meRes.ok) {
+      const me = await meRes.json();
+      if (scope === "admin") {
+        useAuthStore.getState().setAuth({ ...me, role: "admin" }, {}, access_token, "admin", new_refresh);
+      } else {
+        useAuthStore.getState().setAuth(
+          { ...me.user, role: "partner" }, me.features, access_token, "partner", new_refresh
+        );
+      }
     } else {
-      useAuthStore.getState().setAuth(
-        { ...me.user, role: "partner" }, me.features, access_token, "partner"
-      );
+      useAuthStore.getState().setToken(access_token);
+      if (new_refresh) useAuthStore.getState().setRefreshToken(new_refresh);
     }
+    useAuthStore.getState().setLoading(false);
     return true;
   } catch {
     useAuthStore.getState().setLoading(false);
+    if (hasExistingSession) {
+      return true;
+    }
     clearScopeHint();
     return false;
   }

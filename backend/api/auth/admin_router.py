@@ -4,7 +4,7 @@ Admin auth endpoints: POST /admin/auth/login|refresh|logout|me|change-password
 from __future__ import annotations
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
@@ -28,8 +28,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: Optional[str] = None
+
+
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
 
 
@@ -71,35 +76,51 @@ async def admin_login(body: LoginRequest, response: Response):
     refresh_token, jti = create_refresh_token(admin["id"], "admin")
     _store(jti, admin["id"])
     _set_cookie(response, refresh_token)
-    return TokenResponse(access_token=access_token)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def admin_refresh(request: Request, response: Response):
-    token = request.cookies.get(_COOKIE)
+async def admin_refresh(request: Request, response: Response, body: Optional[RefreshRequest] = None):
+    token = None
+    if body and body.refresh_token:
+        token = body.refresh_token.strip()
+    if not token:
+        token = request.cookies.get(_COOKIE)
+    if not token:
+        auth_hdr = request.headers.get("X-Refresh-Token") or request.headers.get("Authorization")
+        if auth_hdr and auth_hdr.startswith("Bearer "):
+            token = auth_hdr[7:].strip()
+        elif auth_hdr:
+            token = auth_hdr.strip()
+
     if not token:
         raise HTTPException(status_code=401, detail="No refresh token")
+
     try:
         payload = decode_refresh_token(token)
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
+
     if payload.get("scope") != "admin":
         raise HTTPException(status_code=403)
+
     with get_conn() as conn:
         row = conn.execute(
             "SELECT is_revoked FROM refresh_tokens WHERE jti = ?", (payload["jti"],)
         ).fetchone()
-    if not row or row[0]:
+    if row and row[0]:
         raise HTTPException(status_code=401, detail="Token revoked")
+
     admin = get_admin_by_id(payload["sub"])
     if not admin:
         raise HTTPException(status_code=401)
+
     _revoke(payload["jti"])
     access_token, _ = create_access_token(admin["id"], "admin")
     new_refresh, new_jti = create_refresh_token(admin["id"], "admin")
     _store(new_jti, admin["id"])
     _set_cookie(response, new_refresh)
-    return TokenResponse(access_token=access_token)
+    return TokenResponse(access_token=access_token, refresh_token=new_refresh)
 
 
 @router.post("/logout", status_code=204)

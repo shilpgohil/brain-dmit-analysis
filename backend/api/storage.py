@@ -143,7 +143,25 @@ def get_presigned_url(key: str, expires: int = 3600) -> Optional[str]:
 
 
 def public_url(key: str) -> Optional[str]:
-    """Return the public URL for *key*, or None if not configured."""
     if not ENABLED or not PUBLIC_BASE_URL:
         return None
     return f"{PUBLIC_BASE_URL}/{key}"
+
+
+def get_storage_info() -> dict:
+    provider = "Local Filesystem"
+    if ENABLED:
+        if "backblazeb2.com" in _ENDPOINT_URL:
+            provider = "Backblaze B2"
+        elif _CF_ACCOUNT_ID or "r2.cloudflarestorage.com" in _ENDPOINT_URL:
+            provider = "Cloudflare R2"
+        else:
+            provider = "S3 Object Storage"
+    return {
+        "enabled": ENABLED,
+        "provider": provider,
+        "bucket": BUCKET if ENABLED else None,
+        "endpoint": _ENDPOINT_URL.split("@")[-1] if _ENDPOINT_URL else None,
+        "public_base_url": PUBLIC_BASE_URL if ENABLED else None,
+    }
+

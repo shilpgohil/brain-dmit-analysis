@@ -18,8 +18,10 @@ import { GOLD } from "@/lib/analysis-theme";
 import { cn, fingerLabel, fingerRouteKey, formatRidgeCount } from "@/lib/utils";
 import {
   Download, RefreshCw, AlertCircle, Fingerprint,
-  Loader2, Clock, User, Layers, MessageSquare,
+  Loader2, Clock, User, Layers, MessageSquare, Sliders, BookOpen,
 } from "lucide-react";
+import { ReportCustomizationDrawer } from "@/components/analysis/ReportCustomizationDrawer";
+import { DossierViewerModal } from "@/components/analysis/DossierViewerModal";
 import { useAuthStore } from "@/store/authStore";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 
@@ -44,6 +46,9 @@ function AnalysisPageContent() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [customizerOpen, setCustomizerOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [dossierRevision, setDossierRevision] = useState(0);
 
   const handleDownloadReport = useCallback(async () => {
     if (downloading) return;
@@ -169,14 +174,32 @@ function AnalysisPageContent() {
               <MagneticButton variant="ghost" size="sm" onClick={load} icon={<RefreshCw className="w-3.5 h-3.5" />}>
                 Refresh
               </MagneticButton>
-              {result.report_url && (
-                <MagneticButton
-                  size="sm"
-                  icon={downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                  onClick={handleDownloadReport}
-                >
-                  {downloading ? "Downloading…" : "Download Report"}
-                </MagneticButton>
+              {(result.report_url || isComplete) && (
+                <>
+                  <MagneticButton
+                    variant="ghost"
+                    size="sm"
+                    icon={<BookOpen className="w-3.5 h-3.5 text-[#D4AF37]" />}
+                    onClick={() => setViewerOpen(true)}
+                  >
+                    View Dossier (64p)
+                  </MagneticButton>
+                  <MagneticButton
+                    variant="secondary"
+                    size="sm"
+                    icon={<Sliders className="w-3.5 h-3.5 text-[#D4AF37]" />}
+                    onClick={() => setCustomizerOpen(true)}
+                  >
+                    Customize &amp; Sign
+                  </MagneticButton>
+                  <MagneticButton
+                    size="sm"
+                    icon={downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                    onClick={handleDownloadReport}
+                  >
+                    {downloading ? "Compiling Dossier…" : "Download Master Dossier"}
+                  </MagneticButton>
+                </>
               )}
               {isComplete && features?.ai_consultant !== "false" && features?.ai_consultant !== "0" && (
                 <Link href={`/analysis/${id}/chat`}>
@@ -458,6 +481,28 @@ function AnalysisPageContent() {
           </>
         )}
       </div>
+
+      <ReportCustomizationDrawer
+        isOpen={customizerOpen}
+        onClose={() => setCustomizerOpen(false)}
+        sessionId={id}
+        subjectName={result?.subject_name}
+        onSuccess={() => {
+          load();
+          setDossierRevision((prev) => prev + 1);
+        }}
+      />
+
+      <DossierViewerModal
+        isOpen={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        sessionId={id}
+        subjectName={result?.subject_name}
+        refreshKey={dossierRevision}
+        onOpenCustomizer={() => {
+          setCustomizerOpen(true);
+        }}
+      />
     </div>
   );
 }

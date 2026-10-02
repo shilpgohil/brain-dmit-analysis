@@ -1,4 +1,8 @@
-﻿# 12-Point Total Context Protocol — DMIT Analysis Platform
+---
+trigger: always_on
+---
+
+# 12-Point Total Context Protocol — DMIT Analysis Platform
 
 ## Trigger Conditions
 Whenever the user asks:
@@ -32,6 +36,8 @@ You are strictly forbidden from providing superficial summaries or skipping file
     7. Spectral FFT energy bands
     8. Pattern analytics
   - Verify quality tier routing (High, Medium, Low).
+
+
 
 ### Point 3: CADA Pattern Classification & Singular Points
 - Audit `backend/pattern_classifier.py`:

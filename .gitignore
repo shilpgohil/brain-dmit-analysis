@@ -38,7 +38,10 @@ node_modules/
 .next/
 out/
 
-# Runtime data / logs
+# Runtime data / databases / logs
+backend/data/*.db
+backend/data/*.db-shm
+backend/data/*.db-wal
 data/*.db
 data/*.db-shm
 data/*.db-wal
@@ -46,9 +49,19 @@ data/*.db-wal
 frontend/next_boot.log
 uvicorn_boot.log
 
-# Extras — reference projects, not part of this repo
+# Environment variables & secrets (CRITICAL)
+*.env
+*.env.*
+extras/*.env*
+**/*.env*
+
+# Reference documents, temp samples, and extras
 extras/Arogya/
 extras/zenith-ai/
+extras/*.pdf
+extras/*.docx
+extras/*.txt
+sample_*.png
 
 # Large client files — never commit to version control
 "clients idea"/

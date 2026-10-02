@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 export interface UserProfile {
   id: string;
@@ -35,32 +36,72 @@ interface AuthState {
   user: UserProfile | null;
   features: FeatureMap;
   accessToken: string | null;
+  refreshToken: string | null;
   scope: "partner" | "admin" | null;
   isLoading: boolean;
 
-  setAuth: (user: UserProfile, features: FeatureMap, token: string, scope: "partner" | "admin") => void;
+  setAuth: (
+    user: UserProfile,
+    features: FeatureMap,
+    token: string,
+    scope: "partner" | "admin",
+    refreshToken?: string | null
+  ) => void;
   clearAuth: () => void;
   setToken: (token: string) => void;
+  setRefreshToken: (token: string | null) => void;
   setLoading: (v: boolean) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  features: {},
-  accessToken: null,
-  scope: null,
-  isLoading: true,
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      features: {},
+      accessToken: null,
+      refreshToken: null,
+      scope: null,
+      isLoading: false,
 
-  setAuth: (user, features, accessToken, scope) =>
-    set({ user, features, accessToken, scope, isLoading: false }),
+      setAuth: (user, features, accessToken, scope, refreshToken) =>
+        set({
+          user,
+          features,
+          accessToken,
+          scope,
+          refreshToken: refreshToken !== undefined ? refreshToken : get().refreshToken,
+          isLoading: false,
+        }),
 
-  clearAuth: () =>
-    set({ user: null, features: {}, accessToken: null, scope: null, isLoading: false }),
+      clearAuth: () =>
+        set({
+          user: null,
+          features: {},
+          accessToken: null,
+          refreshToken: null,
+          scope: null,
+          isLoading: false,
+        }),
 
-  setToken: (accessToken) => set({ accessToken }),
+      setToken: (accessToken) => set({ accessToken }),
 
-  setLoading: (isLoading) => set({ isLoading }),
-}));
+      setRefreshToken: (refreshToken) => set({ refreshToken }),
+
+      setLoading: (isLoading) => set({ isLoading }),
+    }),
+    {
+      name: "dmit:auth-storage",
+      storage: createJSONStorage(() => (typeof window !== "undefined" ? localStorage : ({} as Storage))),
+      partialize: (state) => ({
+        user: state.user,
+        features: state.features,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        scope: state.scope,
+      }),
+    }
+  )
+);
 
 /** Check if a feature is enabled for the current partner. */
 export function useFeature(key: string): boolean {

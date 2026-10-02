@@ -1023,3 +1023,207 @@ def create_mi_full_bar(mi_scores: Dict[str, float]) -> str:
                  fontsize=10, fontfamily='serif', fontweight='bold', pad=8)
     fig.tight_layout()
     return _fig_to_b64(fig)
+
+
+def generate_quotient_10_radar(quotients: Dict[str, float]) -> str:
+    if not MPL or not quotients:
+        return ''
+
+    keys = ['IQ', 'EQ', 'CQ', 'AQ', 'SQ', 'PQ', 'LQ', 'MQ', 'FQ', 'DQ']
+    labels = ['IQ\nIntellect', 'EQ\nEmotion', 'CQ\nCreativity', 'AQ\nAdaptability',
+              'SQ\nSocial', 'PQ\nPhysical', 'LQ\nLeadership', 'MQ\nMotivation',
+              'FQ\nFocus', 'DQ\nDecision']
+    values = [max(0.0, min(1.0, float(quotients.get(k, 0.5)))) for k in keys]
+    
+    num_vars = len(keys)
+    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+    values_closed = values + [values[0]]
+    angles_closed = angles + [angles[0]]
+
+    fig, ax = plt.subplots(figsize=(6.2, 5.2), subplot_kw=dict(polar=True), facecolor=HEX['ivory'])
+    ax.set_facecolor(HEX['cream_alt'])
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+
+    ax.set_xticks(angles)
+    ax.set_xticklabels(labels, color=HEX['navy'], fontsize=8.5, fontfamily='serif', fontweight='bold')
+    ax.set_ylim(0, 1.0)
+    ax.set_yticks([0.25, 0.5, 0.75, 1.0])
+    ax.set_yticklabels(['25%', '50%', '75%', '100%'], color=HEX['grey_text'], fontsize=6.5)
+    ax.grid(color=HEX['gold_light'], linestyle='--', linewidth=0.7, alpha=0.7)
+
+    benchmark = [0.5] * (num_vars + 1)
+    ax.plot(angles_closed, benchmark, color=HEX['slate'], linewidth=1.1, linestyle=':', alpha=0.7)
+
+    ax.plot(angles_closed, values_closed, color=HEX['gold'], linewidth=2.2, zorder=3)
+    ax.fill(angles_closed, values_closed, color=HEX['gold'], alpha=0.25, zorder=2)
+
+    for a, v in zip(angles, values):
+        ax.scatter(a, v, color=HEX['navy'], s=32, zorder=4)
+
+    ax.set_title('10-Quotient Integrated Profile Radar', color=HEX['navy'],
+                 fontsize=11, fontfamily='serif', fontweight='bold', pad=18)
+    fig.tight_layout()
+    return _fig_to_b64(fig)
+
+
+def generate_competency_comparison_radar(
+    domain_name: str,
+    candidate_profile: Dict[str, float],
+    benchmark_profile: Dict[str, float],
+) -> str:
+    if not MPL or not candidate_profile:
+        return ''
+
+    keys = list(candidate_profile.keys())
+    if len(keys) < 3:
+        return ''
+
+    labels = [_wrap(_label(k), 12) for k in keys]
+    cand_vals = [max(0.0, min(1.0, float(candidate_profile.get(k, 0.5)))) for k in keys]
+    bench_vals = [max(0.0, min(1.0, float(benchmark_profile.get(k, 0.6)))) for k in keys]
+
+    num_vars = len(keys)
+    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+    cand_closed = cand_vals + [cand_vals[0]]
+    bench_closed = bench_vals + [bench_vals[0]]
+    angles_closed = angles + [angles[0]]
+
+    fig, ax = plt.subplots(figsize=(5.6, 4.8), subplot_kw=dict(polar=True), facecolor=HEX['ivory'])
+    ax.set_facecolor(HEX['cream_alt'])
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+
+    ax.set_xticks(angles)
+    ax.tick_params(pad=10)
+    ax.set_xticklabels(labels, color=HEX['navy'], fontsize=7.5, fontfamily='serif', fontweight='bold')
+    ax.set_ylim(0, 1.18)
+    ax.set_yticks([0.25, 0.5, 0.75, 1.0])
+    ax.set_yticklabels(['25%', '50%', '75%', '100%'], color=HEX['grey_text'], fontsize=6.5)
+    ax.grid(color=HEX['gold_light'], linestyle='--', linewidth=0.7, alpha=0.7)
+
+    ax.plot(angles_closed, bench_closed, color=HEX['slate'], linewidth=1.5, linestyle='--', label='Required Benchmark')
+    ax.fill(angles_closed, bench_closed, color=HEX['slate'], alpha=0.10)
+
+    ax.plot(angles_closed, cand_closed, color=HEX['gold'], linewidth=2.2, label='Candidate Profile')
+    ax.fill(angles_closed, cand_closed, color=HEX['gold'], alpha=0.28)
+
+    for a, v in zip(angles, cand_vals):
+        ax.scatter(a, v, color=HEX['navy'], s=24, zorder=4)
+
+    ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.28), ncol=2, frameon=False,
+              prop={'family': 'serif', 'size': 8})
+    ax.set_title(f'{domain_name}: Capability Fit Radar', color=HEX['navy'],
+                 fontsize=10, fontfamily='serif', fontweight='bold', pad=14)
+    fig.tight_layout()
+    return _fig_to_b64(fig)
+
+
+def generate_horizontal_progress_bars(
+    title: str,
+    categories: List[Tuple[str, float, str]],
+) -> str:
+    if not MPL or not categories:
+        return ''
+
+    labels = [c[0] for c in categories]
+    values = [max(0.0, min(1.0, float(c[1]))) for c in categories]
+
+    num_items = len(categories)
+    fig, ax = plt.subplots(figsize=(6.8, max(2.2, num_items * 0.85)), facecolor=HEX['ivory'])
+    ax.set_facecolor(HEX['cream_alt'])
+    y_pos = np.arange(num_items)
+
+    ax.barh(y_pos, [1.0] * num_items, 0.48, color=HEX['gold_pale'], alpha=0.45, zorder=1)
+    bar_colors = [HEX['gold'] if v >= 0.7 else (HEX['sage'] if v >= 0.5 else HEX['terracotta']) for v in values]
+    ax.barh(y_pos, values, 0.48, color=bar_colors, zorder=2, alpha=0.92)
+
+    for i, (y, v) in enumerate(zip(y_pos, values)):
+        text_x = v - 0.03 if v > 0.18 else v + 0.02
+        text_col = '#FFFFFF' if v > 0.18 else HEX['navy']
+        ha = 'right' if v > 0.18 else 'left'
+        ax.text(text_x, y, f'{v*100:.1f}%', va='center', ha=ha,
+                fontsize=8.5, color=text_col, fontfamily='serif', fontweight='bold')
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels, fontsize=8.5, color=HEX['navy'], fontfamily='serif', fontweight='bold')
+    ax.set_xlim(-0.02, 1.05)
+    ax.set_xticks([0, 0.25, 0.5, 0.75, 1.0])
+    ax.set_xticklabels(['0', '25%', '50%', '75%', '100%'], fontsize=7, color=HEX['grey_text'])
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_color(HEX['gold_light'])
+    ax.spines['left'].set_color(HEX['gold_light'])
+    ax.set_title(title, color=HEX['navy'], fontsize=10, fontfamily='serif', fontweight='bold', pad=8)
+    fig.tight_layout()
+    return _fig_to_b64(fig)
+
+
+def generate_task_people_donut(task_val: float, people_val: float) -> str:
+    if not MPL:
+        return ''
+
+    task = max(0.01, float(task_val))
+    people = max(0.01, float(people_val))
+    total = task + people
+    t_pct = (task / total) * 100
+    p_pct = (people / total) * 100
+
+    fig, ax = plt.subplots(figsize=(5.2, 3.2), facecolor=HEX['ivory'])
+    ax.set_facecolor(HEX['ivory'])
+
+    sizes = [t_pct, p_pct]
+    colors = [HEX['terracotta'], HEX['sage']]
+    labels = [f'Task-Oriented ({t_pct:.1f}%)', f'People-Oriented ({p_pct:.1f}%)']
+
+    wedges, texts = ax.pie(
+        sizes, labels=labels, colors=colors, startangle=90,
+        wedgeprops=dict(width=0.42, edgecolor=HEX['ivory'], linewidth=2.5),
+        textprops=dict(family='serif', fontsize=8.5, color=HEX['navy'], fontweight='bold')
+    )
+    center_circle = plt.Circle((0, 0), 0.30, fc=HEX['ivory'])
+    ax.add_artist(center_circle)
+    ax.set_title('Operational Leadership Style Distribution', color=HEX['navy'],
+                 fontsize=9.5, fontfamily='serif', fontweight='bold', pad=10)
+    fig.tight_layout()
+    return _fig_to_b64(fig)
+
+
+def generate_analysis_action_divergence(analysis_val: float, action_val: float) -> str:
+    if not MPL:
+        return ''
+
+    a_pct = max(0.0, min(100.0, float(analysis_val) * 100))
+    x_pct = max(0.0, min(100.0, float(action_val) * 100))
+
+    fig, ax = plt.subplots(figsize=(6.2, 2.0), facecolor=HEX['ivory'])
+    ax.set_facecolor(HEX['cream_alt'])
+
+    ax.barh(0, -a_pct, height=0.45, color=HEX['navy'], alpha=0.9, label='Reflective Thought (Analysis)')
+    ax.barh(0, x_pct, height=0.45, color=HEX['terracotta'], alpha=0.9, label='Direct Execution (Action)')
+
+    ax.axvline(0, color=HEX['gold'], linewidth=1.5, linestyle='-')
+    ax.text(-a_pct - 2, 0, f'{a_pct:.1f}%', va='center', ha='right',
+            color=HEX['navy'], fontsize=9, fontfamily='serif', fontweight='bold')
+    ax.text(x_pct + 2, 0, f'{x_pct:.1f}%', va='center', ha='left',
+            color=HEX['terracotta'], fontsize=9, fontfamily='serif', fontweight='bold')
+
+    ax.set_xlim(-115, 115)
+    ax.set_yticks([])
+    ax.set_xticks([-100, -50, 0, 50, 100])
+    ax.set_xticklabels(['100% Analysis', '50%', 'Equilibrium', '50%', '100% Action'],
+                       fontsize=7, color=HEX['grey_text'])
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.spines['bottom'].set_color(HEX['gold_light'])
+    ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.65), ncol=2, frameon=False,
+              prop={'family': 'serif', 'size': 7.5})
+    ax.set_title('Cognitive Processing: Analysis vs. Execution Balance',
+                 color=HEX['navy'], fontsize=9.5, fontfamily='serif', fontweight='bold', pad=8)
+    fig.tight_layout()
+    return _fig_to_b64(fig)
+
+
+create_gauge_chart = create_gauge
+

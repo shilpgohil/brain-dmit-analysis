@@ -17,14 +17,24 @@ export function SmoothScroll({ children }: { children: React.ReactNode }) {
 
     lenisRef.current = lenis;
 
+    const handleStop = () => lenis.stop();
+    const handleStart = () => lenis.start();
+
+    window.addEventListener("lenis:stop", handleStop);
+    window.addEventListener("lenis:start", handleStart);
+
+    let animationFrameId: number;
     function raf(time: number) {
       lenis.raf(time);
-      requestAnimationFrame(raf);
+      animationFrameId = requestAnimationFrame(raf);
     }
 
-    requestAnimationFrame(raf);
+    animationFrameId = requestAnimationFrame(raf);
 
     return () => {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener("lenis:stop", handleStop);
+      window.removeEventListener("lenis:start", handleStart);
       lenis.destroy();
     };
   }, []);

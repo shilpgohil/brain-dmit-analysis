@@ -52,6 +52,9 @@ HEX = {
     'green_strong': '#2E7D32',
     'amber_mid':    '#F57F17',
     'red_weak':     '#C62828',
+    'slate':        '#64748B',
+    'charcoal':     '#1F2937',
+    'white':        '#FFFFFF',
 }
 
 # Score tier colours
@@ -314,6 +317,8 @@ def build_styles():
         rightIndent=12,
     )
 
+    styles['title'] = styles['report_title']
+    styles['subtitle'] = styles['report_subtitle']
     return styles
 
 

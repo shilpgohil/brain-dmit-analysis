@@ -224,3 +224,21 @@ class SystemStatus(BaseModel):
     components: Dict[str, bool]
     total_sessions: int
     processing_queue: int
+
+
+class ReportCustomizationRequest(BaseModel):
+    analyst_name: Optional[str] = None
+    analyst_title: Optional[str] = None
+    analyst_id: Optional[str] = None
+    school_name: Optional[str] = None
+    counselor_notes: Optional[str] = None
+    participant_comments: Optional[str] = None
+    candidate_signature: Optional[str] = None
+    counselor_signature: Optional[str] = None
+
+
+class BatchExportRequest(BaseModel):
+    session_ids: List[str]
+
+
+

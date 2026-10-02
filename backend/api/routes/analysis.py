@@ -4,6 +4,7 @@ Analysis pipeline routes.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import os
@@ -11,12 +12,14 @@ import re
 import shutil
 import sys
 import time
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from api.auth.dependencies import get_current_partner, get_current_admin
 from api.helpers import (
@@ -34,6 +37,7 @@ from api.schemas import (
     AnalysisStatus,
     AtdAnalysis,
     AtdHand,
+    BatchExportRequest,
     BrainLobeCapacity,
     CareerMatch,
     ExtensionResult,
@@ -45,9 +49,11 @@ from api.schemas import (
     PatternType,
     PersonalityProfile,
     PipelineStage,
+    ReportCustomizationRequest,
     SingularPoint,
 )
 from api.store import persist_session, session_store
+from api.persistence import load_partner_settings, save_partner_settings
 import api.storage as storage
 
 sys.path.insert(0, str(Path(__file__).parents[2]))
@@ -1071,18 +1077,39 @@ async def get_analysis(
     )
 
 
+_token_bearer = HTTPBearer(auto_error=False)
+
+
 @router.get("/{session_id}/report/download")
-async def download_report(session_id: str, partner=Depends(get_current_partner)):
+async def download_report(
+    session_id: str,
+    inline: bool = False,
+    token: Optional[str] = Query(None),
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(_token_bearer),
+):
+    partner = None
+    if creds:
+        try:
+            partner = await get_current_partner(creds)
+        except Exception:
+            pass
+    if not partner and token:
+        try:
+            from api.auth.security import decode_access_token
+            from api.db.partners import get_partner_by_id
+            payload = decode_access_token(token)
+            if payload.get("scope") in ("partner", "admin"):
+                partner = get_partner_by_id(payload.get("sub"))
+        except Exception:
+            pass
+    if not partner:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     if session_id not in session_store:
         raise HTTPException(status_code=404, detail="Session not found")
     session = session_store[session_id]
 
-    # Prefer B2 / R2 presigned URL.
-    # Return it as JSON {url, filename} so the frontend can open it directly
-    # via window.open() — this avoids CORS issues that arise when fetch()
-    # follows a cross-origin 302 redirect to B2/R2.
     r2_pdf_key = session.get("r2_pdf_key")
-    if r2_pdf_key and storage.ENABLED:
+    if r2_pdf_key and storage.ENABLED and not inline:
         presigned = storage.get_presigned_url(r2_pdf_key, expires=300)
         if presigned:
             return {
@@ -1091,14 +1118,278 @@ async def download_report(session_id: str, partner=Depends(get_current_partner))
                 "filename": f"DMIT_Report_{session.get('subject_name') or session_id}.pdf",
             }
 
-    # Fallback: stream directly from local filesystem (local dev / no storage)
     report_path = session.get("report_path")
     if not report_path or not Path(report_path).exists():
-        raise HTTPException(status_code=404, detail="Report not yet generated")
+        if r2_pdf_key and storage.ENABLED:
+            dest_path = OUTPUT_DIR / f"dmit_report_{session_id}.pdf"
+            if storage.download_to_file(r2_pdf_key, dest_path):
+                report_path = str(dest_path)
+                session["report_path"] = report_path
+
+    if not report_path or not Path(report_path).exists():
+        result_data = session.get("full_result") or session.get("result")
+        if result_data:
+            from premium_pdf_report import PremiumReportGenerator
+            report_path = str(OUTPUT_DIR / f"dmit_report_{session_id}.pdf")
+            session_meta = {
+                'subject_name': session.get('subject_name', ''),
+                'subject_age': session.get('subject_age', ''),
+                'subject_gender': session.get('subject_gender', ''),
+                'notes': session.get('notes', ''),
+                'counsellor': session.get('counsellor', ''),
+                'school': session.get('school', ''),
+                'report_id': f"RA-{session_id[:8].upper()}",
+                'analyst_name': session.get('analyst_name') or session.get('counsellor', ''),
+                'analyst_title': session.get('analyst_title', ''),
+                'analyst_id': session.get('analyst_id', ''),
+                'school_name': session.get('school_name') or session.get('school', ''),
+                'counselor_notes': session.get('counselor_notes', ''),
+                'participant_comments': session.get('participant_comments', ''),
+                'candidate_signature': session.get('candidate_signature', ''),
+                'counselor_signature': session.get('counselor_signature', ''),
+            }
+            res_dict = result_data if isinstance(result_data, dict) else result_data.model_dump()
+            created_path = PremiumReportGenerator.create_report(
+                pipeline_data=res_dict,
+                output_path=report_path,
+                session=session_meta,
+            )
+            report_path = created_path or report_path
+            session["report_path"] = report_path
+            if storage.ENABLED:
+                r2_pdf_key = f"reports/{session_id}.pdf"
+                storage.upload_file(Path(report_path), r2_pdf_key)
+                session["r2_pdf_key"] = r2_pdf_key
+            persist_session(session_id)
+        else:
+            raise HTTPException(status_code=404, detail="Report not yet generated")
     return FileResponse(
         report_path,
         media_type="application/pdf",
+        content_disposition_type="inline" if inline else "attachment",
         filename=f"DMIT_Report_{session.get('subject_name') or session_id}.pdf",
+    )
+
+
+@router.get("/{session_id}/report/storage-status")
+async def report_storage_status(session_id: str, partner=Depends(get_current_partner)):
+    if session_id not in session_store:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session = session_store[session_id]
+    info = storage.get_storage_info()
+    r2_key = session.get("r2_pdf_key")
+    local_path = session.get("report_path")
+    local_exists = bool(local_path and Path(local_path).exists())
+    local_size = Path(local_path).stat().st_size if local_exists else 0
+    presigned = storage.get_presigned_url(r2_key, expires=3600) if (r2_key and storage.ENABLED) else None
+    return {
+        "session_id": session_id,
+        "storage": info,
+        "r2_pdf_key": r2_key,
+        "in_object_storage": bool(r2_key and storage.ENABLED),
+        "local_file_exists": local_exists,
+        "local_file_size": local_size,
+        "presigned_url": presigned,
+        "pages": 64,
+    }
+
+
+@router.get("/storage/telemetry")
+async def get_storage_telemetry(partner=Depends(get_current_partner)):
+    info = storage.get_storage_info()
+    return {
+        "status": "connected" if info.get("enabled") else "local_standby",
+        "storage": info,
+        "provider": info.get("provider", "local"),
+        "bucket": info.get("bucket"),
+        "endpoint": info.get("endpoint"),
+        "public_base_url": info.get("public_base_url"),
+    }
+
+
+@router.get("/settings/branding")
+async def get_branding_settings(partner=Depends(get_current_partner)):
+    partner_id = partner.get("id", "default") if isinstance(partner, dict) else "default"
+    saved = load_partner_settings(partner_id)
+    defaults = {
+        "analyst_name": "Prof. Shilp Gohil, Ph.D.",
+        "analyst_title": "Senior Biometric Profiler & Cognitive Development Consultant",
+        "analyst_id": "IADP-89241-SR",
+        "school_name": "Apex Global Academy",
+        "counselor_notes": (
+            "Candidate demonstrates exceptional intellectual maturity and focused self-direction. "
+            "Recommended for advanced STEM curriculum with supplementary leadership and debate opportunities. "
+            "Scheduled 6-month progress review confirmed."
+        ),
+        "participant_comments": (
+            "The assessment provided remarkably accurate insights into my innate learning and working style. "
+            "The career alignment roadmap validated my inclination toward strategic systems engineering."
+        ),
+    }
+    defaults.update(saved)
+    return defaults
+
+
+@router.post("/settings/branding")
+async def update_branding_settings(settings: dict, partner=Depends(get_current_partner)):
+    partner_id = partner.get("id", "default") if isinstance(partner, dict) else "default"
+    save_partner_settings(settings, partner_id)
+    return {"status": "success", "settings": settings}
+
+
+@router.get("/{session_id}/report/customization")
+async def get_report_customization(session_id: str, partner=Depends(get_current_partner)):
+    if session_id not in session_store:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session = session_store[session_id]
+    partner_id = partner.get("id", "default") if isinstance(partner, dict) else "default"
+    branding = load_partner_settings(partner_id)
+    return {
+        "analyst_name": session.get("analyst_name") or session.get("counsellor") or branding.get("analyst_name") or "Prof. Shilp Gohil, Ph.D.",
+        "analyst_title": session.get("analyst_title") or branding.get("analyst_title") or "Senior Biometric Profiler & Cognitive Development Consultant",
+        "analyst_id": session.get("analyst_id") or branding.get("analyst_id") or "IADP-89241-SR",
+        "school_name": session.get("school_name") or session.get("school") or branding.get("school_name") or "Apex Global Academy",
+        "counselor_notes": session.get("counselor_notes") or session.get("notes") or branding.get("counselor_notes") or (
+            "Candidate demonstrates exceptional intellectual maturity and focused self-direction. Recommended for advanced "
+            "STEM curriculum with supplementary leadership and debate opportunities. Scheduled 6-month progress review confirmed."
+        ),
+        "participant_comments": session.get("participant_comments") or branding.get("participant_comments") or (
+            "The assessment provided remarkably accurate insights into my innate learning and working style. "
+            "The career alignment roadmap validated my inclination toward strategic systems engineering."
+        ),
+        "candidate_signature": session.get("candidate_signature"),
+        "counselor_signature": session.get("counselor_signature"),
+    }
+
+
+@router.post("/{session_id}/report/generate")
+async def generate_report_endpoint(
+    session_id: str,
+    customization: Optional[ReportCustomizationRequest] = None,
+    partner=Depends(get_current_partner),
+):
+    if session_id not in session_store:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session = session_store[session_id]
+    result_data = session.get("full_result") or session.get("result")
+    if not result_data:
+        raise HTTPException(status_code=400, detail="Cannot generate report: analysis not completed.")
+
+    if customization:
+        if customization.analyst_name is not None:
+            session["counsellor"] = customization.analyst_name
+            session["analyst_name"] = customization.analyst_name
+        if customization.analyst_title is not None:
+            session["analyst_title"] = customization.analyst_title
+        if customization.analyst_id is not None:
+            session["analyst_id"] = customization.analyst_id
+        if customization.school_name is not None:
+            session["school"] = customization.school_name
+            session["school_name"] = customization.school_name
+        if customization.counselor_notes is not None:
+            session["counselor_notes"] = customization.counselor_notes
+        if customization.participant_comments is not None:
+            session["participant_comments"] = customization.participant_comments
+        if customization.candidate_signature is not None:
+            session["candidate_signature"] = customization.candidate_signature
+        if customization.counselor_signature is not None:
+            session["counselor_signature"] = customization.counselor_signature
+
+    from premium_pdf_report import PremiumReportGenerator
+    report_path = str(OUTPUT_DIR / f"dmit_report_{session_id}.pdf")
+    session_meta = {
+        'subject_name': session.get('subject_name', ''),
+        'subject_age': session.get('subject_age', ''),
+        'subject_gender': session.get('subject_gender', ''),
+        'notes': session.get('notes', ''),
+        'counsellor': session.get('counsellor', ''),
+        'school': session.get('school', ''),
+        'report_id': f"RA-{session_id[:8].upper()}",
+        'analyst_name': session.get('analyst_name') or session.get('counsellor', ''),
+        'analyst_title': session.get('analyst_title', ''),
+        'analyst_id': session.get('analyst_id', ''),
+        'school_name': session.get('school_name') or session.get('school', ''),
+        'counselor_notes': session.get('counselor_notes', ''),
+        'participant_comments': session.get('participant_comments', ''),
+        'candidate_signature': session.get('candidate_signature', ''),
+        'counselor_signature': session.get('counselor_signature', ''),
+    }
+    res_dict = result_data if isinstance(result_data, dict) else result_data.model_dump()
+    created_path = PremiumReportGenerator.create_report(
+        pipeline_data=res_dict,
+        output_path=report_path,
+        session=session_meta,
+    )
+    report_path = created_path or report_path
+    session["report_path"] = report_path
+    if storage.ENABLED:
+        r2_pdf_key = f"reports/{session_id}.pdf"
+        storage.upload_file(Path(report_path), r2_pdf_key)
+        session["r2_pdf_key"] = r2_pdf_key
+    persist_session(session_id)
+    return {
+        "status": "completed",
+        "session_id": session_id,
+        "report_url": f"/api/analysis/{session_id}/report/download",
+        "pages": 64,
+        "storage": storage.get_storage_info(),
+    }
+
+
+@router.post("/batch/export-zip")
+async def batch_export_zip(export_req: BatchExportRequest, partner=Depends(get_current_partner)):
+    if not export_req.session_ids:
+        raise HTTPException(status_code=400, detail="No session IDs provided")
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for sid in export_req.session_ids:
+            if sid not in session_store:
+                continue
+            sess = session_store[sid]
+            rpt_path = sess.get("report_path")
+            if not rpt_path or not Path(rpt_path).exists():
+                res_data = sess.get("full_result") or sess.get("result")
+                if res_data:
+                    from premium_pdf_report import PremiumReportGenerator
+                    rpt_path = str(OUTPUT_DIR / f"dmit_report_{sid}.pdf")
+                    s_meta = {
+                        'subject_name': sess.get('subject_name', ''),
+                        'subject_age': sess.get('subject_age', ''),
+                        'subject_gender': sess.get('subject_gender', ''),
+                        'notes': sess.get('notes', ''),
+                        'counsellor': sess.get('counsellor', ''),
+                        'school': sess.get('school', ''),
+                        'report_id': f"RA-{sid[:8].upper()}",
+                        'analyst_name': sess.get('analyst_name') or sess.get('counsellor', ''),
+                        'analyst_title': sess.get('analyst_title', ''),
+                        'analyst_id': sess.get('analyst_id', ''),
+                        'school_name': sess.get('school_name') or sess.get('school', ''),
+                        'counselor_notes': sess.get('counselor_notes', ''),
+                        'participant_comments': sess.get('participant_comments', ''),
+                        'candidate_signature': sess.get('candidate_signature', ''),
+                        'counselor_signature': sess.get('counselor_signature', ''),
+                    }
+                    r_dict = res_data if isinstance(res_data, dict) else res_data.model_dump()
+                    created = PremiumReportGenerator.create_report(
+                        pipeline_data=r_dict,
+                        output_path=rpt_path,
+                        session=s_meta,
+                    )
+                    rpt_path = created or rpt_path
+                    sess["report_path"] = rpt_path
+                    persist_session(sid)
+            if rpt_path and Path(rpt_path).exists():
+                safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', sess.get('subject_name') or 'Candidate')
+                arc_name = f"DMIT_{safe_name}_{sid[:8].upper()}_64Page.pdf"
+                zip_file.write(rpt_path, arcname=arc_name)
+
+    zip_buffer.seek(0)
+    now_str = datetime.now().strftime("%Y%m%d_%H%M")
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="DMIT_Cohort_Dossiers_{now_str}.zip"'},
     )
 
 

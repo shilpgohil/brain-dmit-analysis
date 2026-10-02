@@ -21,6 +21,7 @@ const PUBLIC_NAV = [
 const PARTNER_ONLY_NAV = [
   { label: "Analyze", href: "/analysis/new" },
   { label: "Sessions", href: "/sessions" },
+  { label: "Settings", href: "/settings" },
 ];
 
 const ADMIN_NAV = [

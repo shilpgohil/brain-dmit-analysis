@@ -54,7 +54,17 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS partner_settings (
+                id         TEXT PRIMARY KEY,
+                data       TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
+
 
 
 def load_all_sessions() -> Dict[str, Any]:
@@ -109,3 +119,36 @@ def delete_session(session_id: str) -> None:
     with get_conn() as conn:
         conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
         conn.commit()
+
+
+def save_partner_settings(settings: Dict[str, Any], partner_id: str = "default") -> None:
+    init_db()
+    payload = json.dumps(settings, default=_json_default)
+    now = datetime.now().isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO partner_settings (id, data, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                data       = excluded.data,
+                updated_at = excluded.updated_at
+            """,
+            (partner_id, payload, now),
+        )
+        conn.commit()
+
+
+def load_partner_settings(partner_id: str = "default") -> Dict[str, Any]:
+    init_db()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT data FROM partner_settings WHERE id = ?", (partner_id,)
+        ).fetchone()
+    if not row:
+        return {}
+    try:
+        return json.loads(row["data"], object_hook=_json_object_hook)
+    except json.JSONDecodeError:
+        return {}
+

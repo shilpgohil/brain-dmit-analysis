@@ -23,24 +23,34 @@ jobs:
 
     steps:
       - name: Ping main API
+        env:
+          MAIN_RAW: ${{ secrets.RENDER_BACKEND_URL }}
         run: |
-          curl --silent --show-error --fail \
-            --max-time 60 \
+          MAIN_URL="${MAIN_RAW:-https://brain-dmit-analysis.onrender.com}"
+          MAIN_URL="${MAIN_URL%/}"
+          echo "Pinging Main API at: ${MAIN_URL}/api/health"
+          curl -sS -f \
+            --max-time 120 \
             --retry 3 \
-            --retry-delay 15 \
+            --retry-delay 10 \
             --retry-all-errors \
-            "${{ secrets.RENDER_BACKEND_URL }}/api/health"
+            -A "DMIT-KeepAlive-Cron/1.0" \
+            "${MAIN_URL}/api/health"
+          echo -e "\nMain API ping successful at $(date -u)"
 
       - name: Ping analysis worker
-        if: always()   # ping the worker even if the main API ping failed
+        if: always()
+        env:
+          WORKER_RAW: ${{ secrets.WORKER_BACKEND_URL }}
         run: |
-          if [ -z "${{ secrets.WORKER_BACKEND_URL }}" ]; then
-            echo "WORKER_BACKEND_URL not set - skipping"
-            exit 0
-          fi
-          curl --silent --show-error --fail \
-            --max-time 60 \
+          WORKER_URL="${WORKER_RAW:-https://brain-dmit-analysis-tdyv.onrender.com}"
+          WORKER_URL="${WORKER_URL%/}"
+          echo "Pinging Worker API at: ${WORKER_URL}/health"
+          curl -sS -f \
+            --max-time 120 \
             --retry 3 \
-            --retry-delay 15 \
+            --retry-delay 10 \
             --retry-all-errors \
-            "${{ secrets.WORKER_BACKEND_URL }}/health"
+            -A "DMIT-KeepAlive-Cron/1.0" \
+            "${WORKER_URL}/health"
+          echo -e "\nWorker API ping successful at $(date -u)"

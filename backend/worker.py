@@ -47,9 +47,10 @@ class AnalyzeJob(BaseModel):
     generate_pdf: bool = True
 
 
+@app.get("/")
 @app.get("/health")
+@app.get("/api/health")
 async def health():
-    """Lightweight liveness probe (also used by the keep-alive pinger)."""
     return {"status": "worker-alive"}
 
 

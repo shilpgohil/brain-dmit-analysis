@@ -44,11 +44,14 @@ class SectionHeader(Flowable):
         # Gold left accent bar
         c.setFillColor(GOLD)
         c.roundRect(0, 0, 5, self.height, 2, stroke=0, fill=1)
-        # White title text
         c.setFillColor(colors.white)
-        c.setFont('Times-Bold', 13)
         label = f'Section {self.number}  :  {self.title}'
-        c.drawString(14, 10, label)
+        font_size = 13.0
+        while font_size > 8.0 and c.stringWidth(label, 'Times-Bold', font_size) > (self.width - 32):
+            font_size -= 0.5
+        c.setFont('Times-Bold', font_size)
+        y_pos = (self.height - font_size) / 2 + 1
+        c.drawString(14, y_pos, label)
         c.restoreState()
 
 
@@ -334,3 +337,76 @@ def info_card(title: str, body: str, color=None) -> Table:
         ('ROUNDEDCORNERS', [4, 4, 4, 4]),
     ]))
     return t
+
+
+def institutional_table(
+    rows_data: list,
+    col_widths: list = None,
+    colWidths: list = None,
+    center_cols: list = None,
+    right_cols: list = None,
+) -> Table:
+    cw = col_widths if col_widths is not None else colWidths
+    t = Table(rows_data, colWidths=cw)
+    ts = [
+        ('BACKGROUND', (0, 0), (-1, 0), NAVY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
+        ('FONTNAME', (0, 0), (-1, 0), 'Times-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [GOLD_PALE, IVORY]),
+        ('GRID', (0, 0), (-1, -1), 0.4, GOLD_LIGHT),
+        ('TOPPADDING', (0, 0), (-1, -1), 5.5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5.5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]
+    if center_cols:
+        for c in center_cols:
+            ts.append(('ALIGN', (c, 0), (c, -1), 'CENTER'))
+    if right_cols:
+        for r in right_cols:
+            ts.append(('ALIGN', (r, 0), (r, -1), 'RIGHT'))
+    t.setStyle(TableStyle(ts))
+    return t
+
+
+def institutional_card(
+    content_flowables: list,
+    width: float = None,
+    border_color = GOLD,
+    bg_color = GOLD_PALE,
+) -> Table:
+    w = width or CONTENT_W
+    t = Table([[cf] for cf in content_flowables], colWidths=[w])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), bg_color),
+        ('BOX', (0, 0), (-1, -1), 1.0, border_color),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('ROUNDEDCORNERS', [4, 4, 4, 4]),
+    ]))
+    return t
+
+
+def institutional_stat_badge(label: str, value: str, subtext: str = '') -> Table:
+    rows = [
+        [Paragraph(f'<font size="7.5" color="{NAVY.hexval()}"><b>{label.upper()}</b></font>', STYLES['body'])],
+        [Paragraph(f'<font size="12" color="{GOLD_DARK.hexval()}"><b>{value}</b></font>', STYLES['body'])],
+    ]
+    if subtext:
+        rows.append([Paragraph(f'<font size="7.5" color="{GOLD_DARK.hexval()}">{subtext}</font>', STYLES['body'])])
+    t = Table(rows, colWidths=[CONTENT_W * 0.30])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), GOLD_PALE),
+        ('BOX', (0, 0), (-1, -1), 1.0, GOLD),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('ROUNDEDCORNERS', [4, 4, 4, 4]),
+    ]))
+    return t
+

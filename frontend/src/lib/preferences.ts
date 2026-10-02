@@ -20,7 +20,9 @@ function read(key: string): string | null {
 }
 
 export function getApiUrlOverride(): string | null {
-  return read(KEYS.apiUrl);
+  const val = read(KEYS.apiUrl);
+  if (val && val.includes(":8000")) return null;
+  return val;
 }
 
 export function getDefaultGeneratePdf(): boolean {

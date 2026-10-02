@@ -148,6 +148,8 @@ from api.ai_consultant.router import router as ai_consultant_router
 app.include_router(ai_consultant_router, prefix="/api")
 
 
+@app.get("/")
+@app.get("/health", response_model=SystemStatus)
 @app.get("/api/health", response_model=SystemStatus)
 async def health_check():
     from api.store import session_store

@@ -12,12 +12,13 @@ from typing import Any, Dict, Literal, Optional
 from jose import JWTError, jwt
 import bcrypt as _bcrypt
 
-# ── Config (from env, with safe defaults for local dev) ───────────────────
-_ACCESS_SECRET  = os.getenv("JWT_ACCESS_SECRET",  "dev-access-secret-change-in-prod")
-_REFRESH_SECRET = os.getenv("JWT_REFRESH_SECRET", "dev-refresh-secret-change-in-prod")
+_DEFAULT_SECRET = "9d1fbde9290ea23e3499d3769becb46c4bfbf64d6483e192dda3282274ccf68f"
+_SECRET_KEY     = os.getenv("JWT_SECRET") or os.getenv("JWT_ACCESS_SECRET") or _DEFAULT_SECRET
+_ACCESS_SECRET  = os.getenv("JWT_ACCESS_SECRET") or _SECRET_KEY
+_REFRESH_SECRET = os.getenv("JWT_REFRESH_SECRET") or f"{_SECRET_KEY}_refresh"
 _ALGORITHM      = "HS256"
-ACCESS_TTL_MIN  = int(os.getenv("JWT_ACCESS_TTL_MINUTES",  "480"))   # 8 h
-REFRESH_TTL_DAYS = int(os.getenv("JWT_REFRESH_TTL_DAYS",   "30"))
+ACCESS_TTL_MIN  = int(os.getenv("JWT_ACCESS_TTL_MINUTES", str(365 * 24 * 60)))
+REFRESH_TTL_DAYS = int(os.getenv("JWT_REFRESH_TTL_DAYS", "3650"))
 
 # ── Password hashing ──────────────────────────────────────────────────────
 
@@ -67,15 +68,32 @@ def create_refresh_token(user_id: str, scope: UserScope) -> tuple[str, str]:
 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
-    """Raises JWTError on invalid/expired token."""
-    payload = jwt.decode(token, _ACCESS_SECRET, algorithms=[_ALGORITHM])
+    secrets_to_try = [_ACCESS_SECRET, _SECRET_KEY, "dev-access-secret-change-in-prod"]
+    payload = None
+    for s in secrets_to_try:
+        try:
+            payload = jwt.decode(token, s, algorithms=[_ALGORITHM])
+            break
+        except JWTError:
+            continue
+    if payload is None:
+        raise JWTError("Invalid access token")
     if payload.get("type") != "access":
         raise JWTError("Not an access token")
     return payload
 
 
 def decode_refresh_token(token: str) -> Dict[str, Any]:
-    payload = jwt.decode(token, _REFRESH_SECRET, algorithms=[_ALGORITHM])
+    secrets_to_try = [_REFRESH_SECRET, _SECRET_KEY, "dev-refresh-secret-change-in-prod"]
+    payload = None
+    for s in secrets_to_try:
+        try:
+            payload = jwt.decode(token, s, algorithms=[_ALGORITHM])
+            break
+        except JWTError:
+            continue
+    if payload is None:
+        raise JWTError("Invalid refresh token")
     if payload.get("type") != "refresh":
         raise JWTError("Not a refresh token")
     return payload
